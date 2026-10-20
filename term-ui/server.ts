@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSyn
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { recipeDefaults } from "./catalog";
 import {
-  IO, PORT, broadcast, clearIssue, ctx, heartbeatCheck, hooks, newSession, notifyParent, onHello, resolveIssue, restartSession, saveRecipe, sendTask, startSession, stopSession, type Session, type State,
+  IO, PORT, bucketSessions, broadcast, clearIssue, ctx, heartbeatCheck, hooks, newSession, notifyParent, onHello, resolveIssue, restartSession, saveRecipe, sendTask, startSession, stopSession, type Session, type State,
 } from "./core";
 import { assertPtySupported, terminateTree } from "./pty";
 import { orphans, reconcile, refreshCatalog } from "./reconcile";
@@ -248,6 +248,50 @@ Bun.serve<{ route: string }, {}>({
             return res;
           }
           return bad("unknown action", 404);
+        }
+        case "attach": {
+          if (req.method === "GET") {
+            const folder = url.searchParams.get("folder") ?? "";
+            if (!isAbsolute(folder) || !existsSync(folder) || !statSync(folder).isDirectory()) return bad("folder must be an existing absolute path");
+            const sessions = (await bucketSessions(folder)).map(f => {
+              let title: string | undefined;
+              try {
+                for (const line of readFileSync(f.path, "utf8").slice(0, 4096).split("\n")) {
+                  const e = JSON.parse(line) as { type?: string; title?: string };
+                  if (e.type === "title" && e.title) {
+                    title = e.title;
+                    break;
+                  }
+                }
+              } catch {}
+              return { id: f.id, title, modified: statSync(f.path).mtime.toISOString() };
+            });
+            return json({ sessions });
+          }
+          const body = (await req.json().catch(() => ({}))) as { parent?: string; folder?: string; name?: string; sessionId?: string; start?: boolean; model?: string };
+          const folder = String(body.folder ?? "");
+          if (!isAbsolute(folder) || !existsSync(folder) || !statSync(folder).isDirectory()) return bad("folder must be an existing absolute path");
+          if (existsSync(join(folder, ".orch", "session.json"))) return bad("folder is already a session");
+          const parentRoute = body.parent ?? null;
+          const parentFolder = parentRoute ? ctx.sessions.get(parentRoute)?.folder : ctx.ws;
+          if (parentRoute && !parentFolder) return bad("unknown parent");
+          const name = body.name ?? folder.split("/").filter(Boolean).pop() ?? "";
+          if (!NAME_RE.test(name)) return bad("invalid name (a-z, 0-9, -; 2-32 chars): pass an explicit --name");
+          const linkDir = join(parentFolder ?? ctx.ws, name);
+          if (existsSync(linkDir)) return bad("folder already exists");
+          const files = await bucketSessions(folder);
+          let sessionId = body.sessionId ?? undefined;
+          if (sessionId === "latest") sessionId = files[0]?.id;
+          if (sessionId && !files.some(f => f.id === sessionId)) return bad("session id not found in that folder");
+          const kind = parentRoute ? "child" : "root";
+          const defaults = ctx.catalog ? recipeDefaults(ctx.catalog, kind) : {};
+          const recipe = newRecipe({ ...defaults, ...(body.model ? { model: body.model } : {}), sessionId: sessionId ?? null, desired: body.start ? "running" : "stopped", createdBy: "attach" });
+          mkdirSync(join(linkDir, ".orch"), { recursive: true });
+          writeFileSync(join(linkDir, ".orch", "link.json"), `${JSON.stringify({ target: resolve(folder) }, null, 2)}\n`);
+          writeRecipe(folder, recipe);
+          await reconcile();
+          const s = [...ctx.sessions.values()].find(x => x.folder === folder);
+          return json(s ? view(s) : bad("session not found after attach", 500));
         }
         case "adopt": {
           const body = (await req.json().catch(() => ({}))) as { folder?: string; sessionId?: string };

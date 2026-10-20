@@ -13,6 +13,7 @@ const USAGE = `usage: orch <command>
   move R --to R2
   edit R [--purpose T --model M --thinking L --task M --smol M --compact N --mcp a,b|all|manual] [--restart]
   archive R [--force]
+  attach <absolute folder> [--parent R] [--name N] [--session id|latest|new] [--start]   # link an existing folder (and conversation) as a child
   adopt <absolute folder> [--session id]
   resolve R <code> <action>
   models [filter]
@@ -153,6 +154,26 @@ async function main(): Promise<void> {
     case "adopt": {
       if (pos.length !== 1) throw new Error(USAGE);
       console.log(await call("/api/adopt", { folder: pos[0], ...(flag("session") ? { sessionId: flag("session") } : {}) }));
+      break;
+    }
+    case "attach": {
+      const folder = pos[0];
+      if (!folder) throw new Error(USAGE);
+      const parent = flag("parent") ?? process.env.ORCH_ROUTE ?? "";
+      const session = flag("session");
+      const body: Record<string, unknown> = { parent: parent || null, folder };
+      const name = flag("name");
+      if (name) body.name = name;
+      if (flag("start")) body.start = true;
+      if (!session || session === "new") {
+        const list = JSON.parse(await call(`/api/attach?folder=${encodeURIComponent(folder)}`)) as { sessions: { id: string; title?: string; modified: string }[] };
+        if (!list.sessions.length) console.log(JSON.stringify({ sessions: [], hint: "no omp conversation in that folder yet: attach again with --session new" }));
+        else if (!session) console.log(JSON.stringify(list));
+        else console.log(await call("/api/attach", { ...body, start: body.start ?? false }));
+        break;
+      }
+      body.sessionId = session;
+      console.log(await call("/api/attach", body));
       break;
     }
     case "resolve": {

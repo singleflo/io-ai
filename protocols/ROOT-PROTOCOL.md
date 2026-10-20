@@ -17,7 +17,7 @@ A child has none of your conversation. Every REQ must stand alone.
 - **One task per REQ.** Split anything with independent outcomes.
 - **Imperative and concrete:** absolute paths, ids, model names, exact commands. No "maybe", "if you can", "etc.".
 - **Say whether to act or only to propose.** Default is act within the boundaries; anything irreversible or external (send, delete, deploy, pay) is propose-only unless the user approved it.
-- Template:
+- Template. The last block is mandatory: a peer that never received PEER-PROTOCOL (a plain omp session, an adopted conversation) must still be able to answer correctly — the contract travels with the message.
   ```
   REQ-NNN · <short title>
   Goal: <the outcome in one sentence>
@@ -25,7 +25,12 @@ A child has none of your conversation. Every REQ must stand alone.
   Do: <numbered steps, only when the order matters>
   Do not: <boundaries for this task>
   Done when: <verifiable check: file exists, command output, count>
-  Reply: PEER-PROTOCOL 4-line format
+  How to reply: peer_send to="<your sender peer>" (replyTo="<id>" if this carries one) with exactly:
+    REQ-NNN · <your peer name> · DONE | PARTIAL | BLOCKED
+    Result: <one line>
+    Verified: <command run or file checked> | none
+    Questions: <one line> | none
+  Pure confirmations: peer_send ack:true. If you cannot use peer tools, answer in plain text starting with the REQ line.
   ```
 - Check the reply against `Done when` yourself (read the file, run the command) before reporting to the user.
 
