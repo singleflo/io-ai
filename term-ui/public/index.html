@@ -1,0 +1,878 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>term-ui · sessions</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/geist@5/index.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/geist-mono@5/index.css">
+<style>
+  @font-face { font-family: "JBMono Nerd"; src: url("https://cdn.jsdelivr.net/gh/ryanoasis/nerd-fonts@v3.2.1/patched-fonts/JetBrainsMono/Ligatures/Regular/JetBrainsMonoNerdFont-Regular.ttf") format("truetype"); }
+
+  :root {
+    color-scheme: dark;
+    /* neutrals: cool graphite, three surface steps */
+    --bg: #0b0d11;
+    --s1: #111419;
+    --s2: #171b22;
+    --s3: #1e232c;
+    --line: #242a35;
+    --line-strong: #323a48;
+    --fg: #e8eaf0;
+    --fg-2: #b4bccb;
+    --muted: #8590a3;
+    --term: #0a0c10;
+    /* semantic */
+    --accent: #7aa7ff;
+    --accent-ink: #0b1630;
+    --ok: #3ecf8e;
+    --warn: #f2b54a;
+    --bad: #ff6b6b;
+    --off: #5b6475;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --ease: cubic-bezier(.16, 1, .3, 1);
+    --sans: "Geist Variable", -apple-system, system-ui, sans-serif;
+    --mono: "Geist Mono Variable", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 var(--sans); display: flex; overflow: hidden; -webkit-font-smoothing: antialiased; }
+  ::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--fg); }
+  * { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+  svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* controls */
+  .btn, select, input { font: inherit; font-size: 13px; color: var(--fg); background: var(--s2); border: 1px solid var(--line); border-radius: var(--radius-sm); height: 30px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; cursor: pointer; white-space: nowrap; transition: background .15s, border-color .15s, color .15s; }
+  .btn:hover { background: var(--s3); border-color: var(--line-strong); }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.icon { width: 30px; padding: 0; justify-content: center; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .btn.primary:hover { background: color-mix(in srgb, var(--accent) 88%, white); }
+  .btn.danger { background: var(--bad); border-color: var(--bad); color: #2a0606; font-weight: 600; }
+  .btn.danger:hover { background: color-mix(in srgb, var(--bad) 88%, white); }
+  .btn.warn { background: var(--warn); border-color: var(--warn); color: #2b1a00; font-weight: 600; }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--fg-2); }
+  .btn.ghost:hover { background: var(--s2); color: var(--fg); }
+  select { appearance: none; padding: 0 28px 0 10px; cursor: pointer; background: var(--s2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238590a3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 8px center; }
+  select:hover { border-color: var(--line-strong); }
+  input { padding: 0 10px; width: 100%; }
+  input::placeholder { color: var(--muted); }
+  input:hover { border-color: var(--line-strong); }
+  .group { display: inline-flex; }
+  .group > :first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+  .group > :last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; margin-left: -1px; }
+
+  /* status vocabulary: dot + pill share data-h */
+  .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--off); position: relative; }
+  [data-h="ok"] { --h: var(--ok); }
+  [data-h="work"] { --h: var(--ok); }
+  [data-h="warn"] { --h: var(--warn); }
+  [data-h="bad"] { --h: var(--bad); }
+  [data-h="off"] { --h: var(--off); }
+  .dot[data-h] { background: var(--h); }
+  .dot[data-h="ok"] { background: color-mix(in srgb, var(--ok) 70%, var(--off)); }
+  .dot[data-h="work"]::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 1.5px solid var(--ok); animation: pulse 1.6s var(--ease) infinite; }
+  @keyframes pulse { from { transform: scale(.5); opacity: .9; } to { transform: scale(1.4); opacity: 0; } }
+  .pill { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; color: color-mix(in srgb, var(--h, var(--off)) 85%, white); background: color-mix(in srgb, var(--h, var(--off)) 14%, transparent); }
+  .mono { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pill[data-h="work"] { color: color-mix(in srgb, var(--ok) 90%, white); background: color-mix(in srgb, var(--ok) 20%, transparent); animation: breathe 1.8s var(--ease) infinite; }
+  @keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+  .pill .elapsed { margin-left: 6px; font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 11px; }
+  .count { font-variant-numeric: tabular-nums; }
+  .spacer { flex: 1; }
+
+  /* column 1: roots */
+  aside { width: 232px; flex: none; background: var(--s1); border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 16px 16px 20px; font-weight: 600; letter-spacing: -.01em; }
+  .brand svg { color: var(--accent); }
+  .section-title { padding: 0 16px 6px; font-size: 12px; font-weight: 500; color: var(--muted); }
+  #roots { display: flex; flex-direction: column; gap: 2px; padding: 0 8px; overflow-y: auto; }
+  .root { all: unset; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; color: var(--fg-2); transition: background .15s, color .15s; }
+  .root:hover { background: var(--s2); color: var(--fg); }
+  .root.sel { background: var(--s3); color: var(--fg); }
+  .root:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .root .rn { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .root .count { font-size: 12px; color: var(--muted); min-width: 20px; text-align: center; padding: 1px 6px; border-radius: 999px; background: var(--s2); }
+  .root.sel .count { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+  details.new { margin: 8px; border-radius: var(--radius-sm); }
+  details.new summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--radius-sm); color: var(--fg-2); cursor: pointer; }
+  details.new summary::-webkit-details-marker { display: none; }
+  details.new summary:hover { background: var(--s2); color: var(--fg); }
+  details.new[open] summary { color: var(--fg); }
+  .newform { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px 6px; }
+  .newform select { width: 100%; }
+  .newform .btn { justify-content: center; }
+  .formerr { font-size: 12px; color: var(--bad); }
+  .connstate { margin-top: auto; display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+  #orphans { padding: 12px 8px; border-top: 1px solid var(--line); overflow-y: auto; }
+  #orphans[hidden] { display: none; }
+  #orphans .section-title { padding-left: 8px; }
+  .orphan { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px; border-radius: var(--radius-sm); color: var(--fg-2); font-size: 12px; }
+  .orphan .mono { min-width: 0; max-width: 100%; }
+  .orphan .btn { height: 26px; }
+  .orphan-actions { display: flex; gap: 6px; width: 100%; }
+
+  /* column 2: the leader */
+  #center { flex: 1; min-width: 360px; display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 16px; background: color-mix(in srgb, var(--accent) 3.5%, var(--bg)); }
+  .lead-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
+  .lead-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .lead-name { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+  .lead-meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .chip-lead { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px 0 6px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
+  .chip-lead svg { width: 14px; height: 14px; }
+  .tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .termwrap { position: relative; flex: 1; min-height: 0; background: var(--term); border-radius: var(--radius); padding: 10px 6px 6px 12px; }
+  #center .termwrap { border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); }
+  .termwrap .xterm { height: 100%; }
+  .xterm-viewport { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+
+  /* resize handle */
+  #split { width: 9px; flex: none; cursor: col-resize; position: relative; margin: 0 -4px; z-index: 2; }
+  #split::after { content: ""; position: absolute; inset: 0 4px; background: var(--line); transition: background .15s; }
+  #split:hover::after { background: var(--accent); }
+
+  /* column 3: children */
+  #kidcol { flex: none; display: flex; flex-direction: column; min-width: 300px; background: var(--s1); }
+  #kidhead { display: flex; align-items: center; gap: 10px; height: 58px; padding: 0 16px; border-bottom: 1px solid var(--line); }
+  #kidhead h2 { margin: 0; font-size: 14px; font-weight: 600; }
+  #kidlist { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .empty { margin: 24px 8px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+  .empty code { font-family: var(--mono); font-size: 12px; color: var(--fg-2); background: var(--s2); padding: 1px 5px; border-radius: 4px; }
+
+  .card { flex: none; display: flex; flex-direction: column; background: var(--s2); border: 1px solid color-mix(in srgb, var(--h) 28%, var(--line)); border-radius: var(--radius); transition: border-color .2s var(--ease), background .2s var(--ease), opacity .2s; }
+  .card:hover { border-color: color-mix(in srgb, var(--h) 45%, var(--line)); }
+  .card[data-h="work"] { border-color: color-mix(in srgb, var(--ok) 50%, var(--line)); }
+  .card[data-h="bad"] { border-color: color-mix(in srgb, var(--bad) 70%, var(--line)); background: color-mix(in srgb, var(--bad) 7%, var(--s2)); }
+  .card[data-h="warn"] { border-color: color-mix(in srgb, var(--warn) 65%, var(--line)); background: color-mix(in srgb, var(--warn) 6%, var(--s2)); }
+  .card[data-h="off"] { background: var(--s1); opacity: .72; }
+  .card[data-h="off"]:hover { opacity: 1; }
+  .card .head { all: unset; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 2px 10px; align-items: center; padding: 10px 12px; cursor: pointer; border-radius: var(--radius); }
+  .card .head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .card .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .chev { color: var(--muted); transition: transform .2s var(--ease); }
+  .card.open .chev { transform: rotate(180deg); }
+  .card .sub { grid-column: 2 / 5; display: flex; gap: 8px; min-width: 0; }
+  .card .purpose { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .sub .mono { flex: none; max-width: 60%; }
+  .alert { display: none; align-items: center; gap: 10px; margin: 0 12px 10px; padding: 8px 8px 8px 10px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; color: color-mix(in srgb, var(--h) 70%, white); background: color-mix(in srgb, var(--h) 14%, transparent); }
+  .card[data-status="bad"] .alert, .card[data-status="warn"] .alert { display: flex; }
+  .alert span { flex: 1; }
+  .issues { display: flex; flex-direction: column; gap: 6px; }
+  .card .issues { margin: 0 12px 10px; }
+  .issues:empty { display: none; }
+  .issue { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--s2); color: var(--muted); font-size: 12px; }
+  .issue[data-level="ask"], .issue[data-level="flag"] { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, var(--s2)); }
+  .issue-copy { flex: 1; min-width: 160px; }
+  .issue-detail { display: block; color: var(--muted); font-weight: 400; }
+  .issue-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .issue .btn { height: 26px; }
+  .card .bar { display: none; align-items: center; gap: 8px; padding: 0 12px 10px; flex-wrap: wrap; }
+  .card.open .bar { display: flex; }
+  .card .termwrap { display: none; flex: none; height: 46vh; resize: vertical; overflow: hidden; margin: 0 6px 6px; border-radius: var(--radius-sm); }
+  .card.open .termwrap { display: block; }
+  #kidcol.focus .card:not(.focused) { display: none; }
+  #kidcol.focus .card.focused { flex: 1; }
+  #kidcol.focus .card.focused .termwrap { flex: 1; height: auto; resize: none; }
+
+  /* dead / frozen terminal scrim */
+  .ov { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; gap: 6px; align-items: center; justify-content: center; text-align: center; padding: 16px; border-radius: inherit; background: color-mix(in srgb, var(--term) 84%, transparent); }
+  .ov svg { width: 22px; height: 22px; color: var(--h); }
+  .ov b { font-size: 15px; }
+  .ov small { color: var(--muted); margin-bottom: 8px; }
+
+  /* connection lost */
+  #conn { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; font-size: 13px; font-weight: 500; color: #ffe1e1; background: #3a1418; border: 1px solid color-mix(in srgb, var(--bad) 55%, transparent); box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  #conn[hidden] { display: none; }
+  .global-issues { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 19; width: min(560px, calc(100vw - 24px)); }
+  .global-issues[hidden] { display: none; }
+  #conn:not([hidden]) + .global-issues { top: 58px; }
+  dialog { width: min(480px, calc(100vw - 32px)); padding: 20px; color: var(--fg); background: var(--s1); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: 0 16px 48px rgba(0,0,0,.5); }
+  dialog::backdrop { background: rgba(5,7,10,.6); }
+  dialog h3 { margin: 0 0 14px; font-size: 15px; font-weight: 600; }
+  dialog form { display: flex; flex-direction: column; gap: 10px; }
+  dialog label { font-size: 12px; color: var(--muted); }
+  dialog select { width: 100%; }
+  dialog .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+
+  dialog { width: min(600px, calc(100vw - 32px)); }
+  textarea { width: 100%; min-height: 84px; resize: vertical; padding: 8px 10px; font: inherit; font-size: 13px; line-height: 1.5; color: var(--fg); background: var(--s2); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+  textarea::placeholder { color: var(--muted); }
+  textarea:hover { border-color: var(--line-strong); }
+  .wiz-head { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .wiz-head h3 { margin: 0; font-size: 15px; font-weight: 600; }
+  .steps { display: flex; gap: 6px; }
+  .step { flex: 1; height: 3px; border-radius: 2px; background: var(--line); transition: background .2s var(--ease); }
+  .step.on { background: var(--accent); }
+  .wiz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .wiz-wide { grid-column: 1 / -1; }
+  .wiz-field { display: flex; flex-direction: column; gap: 5px; }
+  .wiz-hint { margin: 0 0 12px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; max-height: 44vh; overflow-y: auto; padding-right: 4px; }
+  .check { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px; row-gap: 2px; align-items: center; padding: 8px 10px; border: 1px solid transparent; border-radius: var(--radius-sm); cursor: pointer; transition: background .15s, border-color .15s; }
+  .check:hover { background: var(--s2); }
+  .check:has(input:checked) { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+  .check input { appearance: none; width: 16px; height: 16px; margin: 0; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--s2); cursor: pointer; display: grid; place-content: center; transition: background .15s, border-color .15s; }
+  .check input:checked { background: var(--accent); border-color: var(--accent); }
+  .check input:checked::after { content: ""; width: 9px; height: 9px; background: var(--accent-ink); clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%); }
+  .check input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .check b { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .check small { grid-column: 2; color: var(--muted); font-size: 11px; }
+  .check .off { color: var(--warn); }
+  .wiz-foot { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+  .wiz-foot .formerr { margin: 0; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<dialog id="wizDlg">
+  <header class="wiz-head">
+    <h3 data-i18n="wiz.title"></h3>
+    <div class="steps" aria-hidden="true"><span class="step"></span><span class="step"></span></div>
+  </header>
+  <form method="dialog" id="wizForm" autocomplete="off">
+    <section data-w="1">
+      <div class="wiz-grid">
+        <div class="wiz-field wiz-wide">
+          <label for="wizName" data-i18n="roots.namePh"></label>
+          <input id="wizName" required>
+        </div>
+        <div class="wiz-field wiz-wide">
+          <label for="wizPurpose" data-i18n="wiz.mission"></label>
+          <textarea id="wizPurpose" rows="3" data-i18n-ph="wiz.missionPh" required></textarea>
+        </div>
+        <div class="wiz-field">
+          <label for="wizModel" data-i18n="roots.model"></label><select id="wizModel"></select>
+        </div>
+        <div class="wiz-field">
+          <label for="wizThinking" data-i18n="edit.thinking"></label><select id="wizThinking"></select>
+        </div>
+      </div>
+    </section>
+    <section data-w="2" hidden>
+      <p class="wiz-hint" data-i18n="wiz.mcpHint"></p>
+      <div class="checks" id="wizMcp"></div>
+      <p class="wiz-hint" data-i18n="wiz.skillHint"></p>
+      <div class="checks" id="wizSkills"></div>
+    </section>
+    <footer class="wiz-foot">
+      <span class="formerr" id="wizErr" hidden></span>
+      <span class="spacer"></span>
+      <button class="btn ghost" type="button" id="wizCancel" data-i18n="edit.cancel"></button>
+      <button class="btn" type="button" id="wizBack" data-i18n="wiz.back" hidden></button>
+      <button class="btn" type="button" id="wizNext" data-i18n="wiz.next"></button>
+      <button class="btn primary" type="button" id="wizDone" data-i18n="roots.create" hidden></button>
+    </footer>
+  </form>
+</dialog>
+<dialog id="editDlg">
+  <h3><span data-i18n="edit.title"></span> · <span class="mono" id="editTitle"></span></h3>
+  <form method="dialog" id="editForm">
+    <label for="editPurpose" data-i18n="edit.purpose"></label><input id="editPurpose" autocomplete="off">
+    <label for="editModel" data-i18n="edit.model"></label><select id="editModel"></select>
+    <label for="editThinking" data-i18n="edit.thinking"></label><select id="editThinking"></select>
+    <span class="formerr" id="editErr" hidden></span>
+    <div class="row">
+      <button class="btn ghost" type="button" id="editCancel" data-i18n="edit.cancel"></button>
+      <button class="btn" type="button" id="editSave" data-i18n="edit.save"></button>
+      <button class="btn primary" type="button" id="editSaveRestart" data-i18n="edit.saveRestart"></button>
+    </div>
+  </form>
+</dialog>
+<aside>
+  <div class="brand"><svg class="i" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>term-ui</div>
+  <div class="section-title" data-i18n="roots.title"></div>
+  <nav id="roots" data-i18n-aria="aria.roots"></nav>
+  <details class="new" id="newRoot">
+    <summary><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg><span data-i18n="roots.new"></span></summary>
+  </details>
+  <section id="orphans" hidden>
+    <div class="section-title" data-i18n="orphans.title"></div>
+    <div id="orphanlist"></div>
+  </section>
+  <div class="connstate"><span class="dot" id="conndot" data-h="ok"></span><span id="conntext"></span><span class="spacer"></span>
+    <select id="lang" data-i18n-aria="lang.label"><option value="en">EN</option><option value="it">IT</option></select></div>
+</aside>
+
+<div id="conn" role="status" hidden><svg class="i" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></svg><span data-i18n="conn.banner"></span></div>
+<div id="globalissues" class="issues global-issues" hidden></div>
+
+<section id="center" data-i18n-aria="aria.lead">
+  <header class="lead-head">
+    <div class="lead-id">
+      <div class="lead-name"><span class="chip-lead"><svg class="i" viewBox="0 0 24 24"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.020 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"/><path d="M5 21h14"/></svg><span data-i18n="lead.chip"></span></span><span id="title"></span></div>
+      <div class="lead-meta"><span class="pill" id="rootstate"></span><span class="mono" id="rootmodel"></span></div>
+    </div>
+    <span class="spacer"></span>
+    <div class="tools" id="roottools"></div>
+  </header>
+  <div id="rootissues" class="issues"></div>
+  <div class="termwrap" id="rootterm"></div>
+</section>
+
+<div id="split" role="separator" aria-orientation="vertical" data-i18n-title="split.title"></div>
+
+<section id="kidcol" data-i18n-aria="aria.kids">
+  <div id="kidhead"><h2 data-i18n="kids.title"></h2><span class="mono count" id="kidcount"></span><span class="spacer"></span><button class="btn ghost" id="closeAll" data-i18n="kids.closeAll"></button></div>
+  <div id="kidlist"></div>
+</section>
+
+<script type="module">
+import { Terminal } from "https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/+esm";
+import { FitAddon } from "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/+esm";
+
+// Models offered by the per-session selector come from the omp catalog, never a hardcoded list.
+const CATALOG = await (await fetch("/api/catalog")).json();
+const MODELS = CATALOG?.models ?? [];
+// Lucide icon paths (stroke icons, one family).
+const ICONS = {
+  play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+  stop: '<rect width="14" height="14" x="5" y="5" rx="2"/>',
+  restart: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
+  max: '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/>',
+  min: '<polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" x2="21" y1="10" y2="3"/><line x1="3" x2="10" y1="21" y2="14"/>',
+  close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  chev: '<path d="m6 9 6 6 6-6"/>',
+  warn: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  crash: '<path d="m15 9-6 6"/><path d="M2.586 16.726A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2h6.624a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586z"/><path d="m9 9 6 6"/>',
+  pause: '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
+  edit: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
+  repaint: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M12 8v4l3 2"/>',
+  treestop: '<circle cx="12" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="5" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><path d="M12 7v4M12 13v4M7 12h4M13 12h4"/>',
+  archive: '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
+};
+const ic = (n, cls = "") => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
+
+const ls = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+const api = (path, body) => fetch(path, body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+const $ = id => document.getElementById(id);
+const enc = encodeURIComponent;
+
+// i18n: UI strings live in /i18n/<lang>.json; English is the source and the fallback.
+const LANG = ls("termui:lang", "en");
+const loadDict = async l => (await fetch(`/i18n/${l}.json`)).json();
+const EN = await loadDict("en");
+const DICT = LANG === "en" ? EN : { ...EN, ...(await loadDict(LANG).catch(() => ({}))) };
+const t = (key, vars = {}) => (DICT[key] ?? key).replace(/\{(\w+)\}/g, (_, v) => String(vars[v] ?? ""));
+document.documentElement.lang = LANG;
+for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
+for (const el of document.querySelectorAll("[data-i18n-ph]")) el.placeholder = t(el.dataset.i18nPh);
+for (const el of document.querySelectorAll("[data-i18n-title]")) el.title = t(el.dataset.i18nTitle);
+for (const el of document.querySelectorAll("[data-i18n-aria]")) el.setAttribute("aria-label", t(el.dataset.i18nAria));
+$("lang").value = LANG;
+$("lang").onchange = e => { save("termui:lang", e.target.value); location.reload(); };
+
+let sessions = [];
+let selected = ls("termui:selected", null);
+const byRoute = route => sessions.find(s => s.route === route);
+const roots = () => sessions.filter(s => s.kind === "root");
+const kids = route => sessions.filter(s => s.route.startsWith(`${route}/`)).sort((a, b) => a.route.localeCompare(b.route));
+const openOf = r => ls(`termui:open:${r}`, []);
+const focusOf = r => ls(`termui:focus:${r}`, null);
+// Health: bad = crashed (stopped while desired running); warn = alive but no heartbeat; off = stopped on purpose.
+const health = s => (!s.running ? (s.desired === "stopped" ? "off" : "bad") : s.hung ? "warn" : s.state === "working" ? "work" : "ok");
+const stateLabel = s => (!s.running ? (s.desired === "stopped" ? t("state.stopped") : `${t("state.exited")}${s.exit ? ` · ${s.exit}` : ""}`) : s.hung ? t("state.hung") : t(`state.${s.state}`));
+// The recipe model is the one omp runs: it is set at start and follows in-session /model changes.
+const modelOf = s => s.model ?? t("model.default");
+
+const XTERM_THEME = { background: "#0a0c10", foreground: "#e8eaf0", cursor: "#7aa7ff", cursorAccent: "#0a0c10", selectionBackground: "rgba(122,167,255,.32)" };
+
+// Live terminal attached to a session: WebSocket open only while mounted.
+function attach(route, host) {
+  const term = new Terminal({ fontSize: 13, lineHeight: 1.1, fontFamily: "'JBMono Nerd', 'JetBrainsMono Nerd Font', Menlo, monospace", cursorBlink: true, scrollback: 5000, theme: XTERM_THEME });
+  const fit = new FitAddon();
+  term.loadAddon(fit);
+  term.open(host);
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/pty/${enc(route)}`);
+  const resize = () => { try { fit.fit(); } catch {} ws.readyState === 1 && ws.send(JSON.stringify({ t: "resize", cols: term.cols, rows: term.rows })); };
+  const live = { route, closed: false, term, fit, dispose: () => { ro.disconnect(); ws.onclose = null; ws.close(); term.dispose(); host.querySelector(".xterm")?.remove(); } };
+  ws.onmessage = e => term.write(e.data);
+  // Soft reload on (re)attach: a clean buffer takes the replayed scrollback without leftover escapes.
+  ws.onopen = () => { term.reset(); resize(); };
+  ws.onclose = () => { live.closed = true; }; // server gone or restarted: render() re-attaches
+  term.onData(d => ws.readyState === 1 && ws.send(JSON.stringify({ t: "in", d })));
+  const ro = new ResizeObserver(resize);
+  ro.observe(host);
+  return live;
+}
+
+// Scrim over a terminal whose process is stopped or frozen, with the action that fixes it.
+function paintOverlay(host, s) {
+  let ov = host.querySelector(".ov");
+  const h = health(s);
+  if (h !== "bad" && h !== "warn" && h !== "off") return ov?.remove();
+  if (!ov) { ov = document.createElement("div"); ov.className = "ov"; host.appendChild(ov); }
+  const copy = {
+    bad: [ic("crash"), t("ov.bad.title"), `${s.exit ? t("ov.bad.exit", { exit: s.exit }) : ""}${t("ov.bad.body")}`, t("alert.restartNow"), "danger", "start"],
+    warn: [ic("warn"), t("ov.warn.title"), t("ov.warn.body"), t("alert.restart"), "warn", "restart"],
+    off: [ic("pause"), t("ov.off.title"), t("ov.off.body"), t("tools.start"), "primary", "start"],
+  }[h];
+  const sig = `${h}|${s.exit}`;
+  if (ov.dataset.sig === sig) return;
+  ov.dataset.sig = sig;
+  ov.dataset.h = h;
+  ov.innerHTML = `${copy[0]}<b></b><small></small><button class="btn ${copy[4]}">${copy[3]}</button>`;
+  ov.querySelector("b").textContent = copy[1];
+  ov.querySelector("small").textContent = copy[2];
+  ov.querySelector("button").onclick = e => { e.stopPropagation(); api(`/api/sessions/${enc(s.route)}/${copy[5]}`, {}).then(refresh); };
+}
+
+const toolsHtml = () => `<div class="group"><select aria-label="${t("tools.modelAria")}">${MODELS.map(m => `<option value="${m}">${m}</option>`).join("")}</select>
+  <button class="btn" data-a="restart" title="${t("tools.restartTitle")}">${ic("restart")}${t("tools.restart")}</button></div>
+  <button class="btn" data-a="toggle"></button>
+  <button class="btn icon ghost" data-a="edit" title="${t("tools.edit")}" aria-label="${t("tools.edit")}">${ic("edit")}</button>
+  <button class="btn icon ghost" data-a="archive" title="${t("tools.archive")}" aria-label="${t("tools.archive")}">${ic("archive")}</button>
+  <button class="btn icon ghost" data-a="repaint" title="${t("tools.repaint")}" aria-label="${t("tools.repaint")}">${ic("repaint")}</button>
+  <button class="btn icon ghost" data-a="stop-subtree" title="${t("tools.stopSubtree")}" aria-label="${t("tools.stopSubtree")}">${ic("treestop")}</button>
+  <button class="btn icon ghost" data-a="kill-subtree" title="${t("tools.killSubtree")}" aria-label="${t("tools.killSubtree")}">${ic("crash")}</button>`;
+function wireTools(el, route) {
+  el.querySelector('[data-a="restart"]').onclick = e => { e.stopPropagation(); api(`/api/sessions/${enc(route)}/restart`, { model: el.querySelector("select").value }).then(refresh); };
+  el.querySelector('[data-a="toggle"]').onclick = e => { e.stopPropagation(); api(`/api/sessions/${enc(route)}/${byRoute(route).running ? "stop" : "start"}`, {}).then(refresh); };
+  el.querySelector('[data-a="edit"]').onclick = e => { e.stopPropagation(); openEdit(route); };
+  el.querySelector('[data-a="archive"]').onclick = e => { e.stopPropagation(); void archive(route); };
+  el.querySelector('[data-a="repaint"]').onclick = e => { e.stopPropagation(); repaint(route); };
+  el.querySelector('[data-a="stop-subtree"]').onclick = e => { e.stopPropagation(); void treeStop(route, "stop-subtree"); };
+  el.querySelector('[data-a="kill-subtree"]').onclick = e => { e.stopPropagation(); void treeStop(route, "kill-subtree"); };
+  el.querySelector("select").onclick = e => e.stopPropagation();
+}
+
+// Edit the recipe (purpose, model, thinking). Saved at once; a running session is flagged restart-needed unless "save and restart".
+const THINKING = ["", "minimal", "low", "medium", "high", "xhigh", "max"];
+function openEdit(route) {
+  const s = byRoute(route);
+  const dlg = $("editDlg");
+  dlg.dataset.route = route;
+  $("editTitle").textContent = route;
+  $("editPurpose").value = s.purpose ?? "";
+  $("editModel").innerHTML = MODELS.map(m => `<option value="${m}">${m}</option>`).join("");
+  $("editModel").value = (s.model ?? "").split(":")[0];
+  $("editThinking").innerHTML = THINKING.map(l => `<option value="${l}">${l || t("edit.thinkingDefault")}</option>`).join("");
+  $("editThinking").value = s.thinking ?? "";
+  $("editErr").hidden = true;
+  dlg.showModal();
+}
+async function saveEdit(restart) {
+  const dlg = $("editDlg");
+  const r = await api(`/api/sessions/${enc(dlg.dataset.route)}/edit`, {
+    purpose: $("editPurpose").value.trim(),
+    model: $("editModel").value,
+    thinking: $("editThinking").value || null,
+    restart,
+  });
+  if (!r.ok) {
+    $("editErr").textContent = await r.text();
+    $("editErr").hidden = false;
+    return;
+  }
+  dlg.close();
+  await refresh();
+}
+
+// Soft reload of the xterm view only: a 1-row resize forces xterm to reflow and repaint,
+// which clears misaligned leftovers without touching the session or the PTY.
+function repaint(route) {
+  const live = route === selected ? rootLive : cards.get(route)?.live;
+  const term = live?.term;
+  if (!term) return;
+  const { cols, rows } = term;
+  try {
+    term.resize(cols, Math.max(rows - 1, 2));
+    term.resize(cols, rows);
+    live.fit?.fit();
+    term.scrollToBottom();
+  } catch {}
+}
+
+// Stop the whole subtree: graceful lets omp flush and exit (children first), kill force-stops stuck processes.
+async function treeStop(route, action) {
+  const n = sessions.filter(x => x.route.startsWith(`${route}/`)).length;
+  const key = action === "kill-subtree" ? "tree.killConfirm" : "tree.stopConfirm";
+  if (!confirm(t(key, { route, n }))) return;
+  const r = await api(`/api/sessions/${enc(route)}/${action}`, {});
+  if (!r.ok) return alert(await r.text());
+  await refresh();
+}
+
+// Archive = stop and move under <workspace>/_archive (with its child sessions). Nothing is deleted.
+async function archive(route) {
+  const n = sessions.filter(x => x.route.startsWith(`${route}/`)).length;
+  if (!confirm(t("archive.confirm", { route, n }))) return;
+  let r = await api(`/api/sessions/${enc(route)}/archive`, {});
+  if (r.status === 409 && confirm(t("archive.busy"))) r = await api(`/api/sessions/${enc(route)}/archive`, { force: true });
+  if (!r.ok) return alert(await r.text());
+  if (selected === route) { selected = null; save("termui:selected", null); }
+  await refresh();
+}
+// Keep the selector on the session's current model unless the user is choosing one.
+const syncModel = (el, s) => {
+  const sel = el.querySelector("select");
+  if (sel && document.activeElement !== sel && s.model) sel.value = s.model.split(":")[0];
+};
+const paintToggle = (btn, s) => {
+  const html = s.running ? `${ic("stop")}${t("tools.stop")}` : `${ic("play")}${t("tools.start")}`;
+  if (btn.innerHTML !== html) btn.innerHTML = html;
+};
+
+// Column 2: root terminal.
+let rootLive;
+$("roottools").innerHTML = toolsHtml();
+function showRoot() {
+  if (rootLive?.route === selected && !rootLive.closed) return;
+  rootLive?.dispose();
+  rootLive = selected ? attach(selected, $("rootterm")) : undefined;
+  if (selected) wireTools($("roottools"), selected);
+}
+
+// Working elapsed: server sends workingSince; the ticker only rewrites the spans, no re-render.
+const fmtElapsed = ms => {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h ? `${h}h ${String(m).padStart(2, "0")}m` : m ? `${m}m ${String(s % 60).padStart(2, "0")}s` : `${s}s`;
+};
+const elapsedSpan = (host, s) => {
+  let el = host.querySelector(".elapsed");
+  if (!el && s.state === "working" && s.workingSince) {
+    el = document.createElement("span");
+    el.className = "elapsed";
+    host.appendChild(el);
+  }
+  if (el) el.textContent = s.state === "working" && s.workingSince ? fmtElapsed(Date.now() - s.workingSince) : el.remove() ?? "";
+};
+setInterval(() => {
+  const root = selected && byRoute(selected);
+  if (root) elapsedSpan($("rootstate"), root);
+  for (const [route, c] of cards) { const s = byRoute(route); if (s) elapsedSpan(c.el.querySelector(".st"), s); }
+}, 1000);
+
+// Column 3: one card per descendant; terminal mounted only when the card is open.
+const cards = new Map(); // route -> { el, live }
+function cardFor(k) {
+  if (cards.has(k.route)) return cards.get(k.route);
+  const el = document.createElement("article");
+  el.className = "card";
+  el.innerHTML = `<button class="head" aria-expanded="false"><span class="dot"></span><span class="name"></span><span class="pill st"></span>${ic("chev", "chev")}
+      <span class="sub"><span class="mono model"></span><span class="purpose"></span></span></button>
+    <div class="alert" role="alert"><span></span><button class="btn" data-a="fix"></button></div>
+    <div class="issues"></div>
+    <div class="bar">${toolsHtml()}<span class="spacer"></span>
+      <button class="btn icon ghost" data-a="focus"></button><button class="btn icon ghost" data-a="close" title="${t("card.close")}" aria-label="${t("card.close")}">${ic("close")}</button></div>
+    <div class="termwrap"></div>`;
+  el.querySelector(".head").onclick = () => setOpen(k.route, !openOf(selected).includes(k.route));
+  el.querySelector('[data-a="close"]').onclick = () => setOpen(k.route, false);
+  el.querySelector('[data-a="focus"]').onclick = () => { save(`termui:focus:${selected}`, focusOf(selected) === k.route ? null : k.route); render(); };
+  wireTools(el, k.route);
+  el.querySelector('[data-a="fix"]').onclick = e => { e.stopPropagation(); api(`/api/sessions/${enc(k.route)}/${byRoute(k.route).running ? "restart" : "start"}`, {}).then(refresh); };
+  const c = { el, live: undefined };
+  cards.set(k.route, c);
+  return c;
+}
+function setOpen(route, open) {
+  const cur = openOf(selected).filter(n => n !== route);
+  save(`termui:open:${selected}`, open ? [...cur, route] : cur);
+  if (!open && focusOf(selected) === route) save(`termui:focus:${selected}`, null);
+  render();
+}
+
+function paintIssues(host, issues, route) {
+  host.replaceChildren();
+  for (const issue of issues ?? []) {
+    const row = document.createElement("div");
+    row.className = "issue";
+    row.dataset.level = issue.level;
+    const copy = document.createElement("span");
+    copy.className = "issue-copy";
+    const key = `issue.${issue.code}`;
+    const localized = DICT[key] !== undefined;
+    copy.textContent = localized ? t(key) : issue.text;
+    if (localized && issue.text) {
+      const detail = document.createElement("span");
+      detail.className = "issue-detail";
+      detail.textContent = issue.text;
+      copy.appendChild(detail);
+    }
+    row.appendChild(copy);
+    if (route && issue.actions?.length) {
+      const actions = document.createElement("span");
+      actions.className = "issue-actions";
+      for (const action of issue.actions) {
+        const button = document.createElement("button");
+        button.className = "btn";
+        button.textContent = t(`action.${action}`);
+        button.onclick = async () => {
+          const response = await api(`/api/sessions/${enc(route)}/resolve`, { code: issue.code, action });
+          if (!response.ok) return alert(await response.text());
+          await refresh();
+          await refreshAux();
+        };
+        actions.appendChild(button);
+      }
+      row.appendChild(actions);
+    }
+    host.appendChild(row);
+  }
+}
+
+async function refreshAux() {
+  const [orphans, globalIssues] = await Promise.all([
+    fetch("/api/orphans").then(r => r.json()),
+    fetch("/api/global-issues").then(r => r.json()),
+  ]);
+  $("orphans").hidden = !orphans.length;
+  $("orphanlist").replaceChildren();
+  for (const orphan of orphans) {
+    const row = document.createElement("div");
+    row.className = "orphan";
+    const label = document.createElement("span");
+    label.className = "mono";
+    label.textContent = `${orphan.id.slice(0, 8)} · ${orphan.route}`;
+    label.title = orphan.id;
+    const actions = document.createElement("div");
+    actions.className = "orphan-actions";
+    for (const action of ["forget", "relink"]) {
+      const button = document.createElement("button");
+      button.className = "btn";
+      button.textContent = t(`orphans.${action}`);
+      button.onclick = async () => {
+        const folder = action === "relink" ? window.prompt(t("orphans.folderPrompt")) : null;
+        if (action === "relink" && folder === null) return;
+        const response = await api(`/api/orphans/${enc(orphan.id)}/${action}`, action === "relink" ? { folder } : {});
+        if (!response.ok) return alert(await response.text());
+        await refresh();
+        await refreshAux();
+      };
+      actions.appendChild(button);
+    }
+    row.append(label, actions);
+    $("orphanlist").appendChild(row);
+  }
+  $("globalissues").hidden = !globalIssues.length;
+  paintIssues($("globalissues"), globalIssues);
+}
+
+function render() {
+  const rs = roots();
+  if (!rs.find(r => r.route === selected)) selected = rs[0]?.route ?? null;
+  $("roots").innerHTML = "";
+  for (const r of rs) {
+    const b = document.createElement("button");
+    b.className = "root" + (r.route === selected ? " sel" : "");
+    if (r.route === selected) b.setAttribute("aria-current", "true");
+    b.innerHTML = `<span class="dot" data-h="${health(r)}"></span><span class="rn"></span><span class="count">${kids(r.route).length}</span>`;
+    b.querySelector(".rn").textContent = r.name;
+    b.title = `${r.route} · ${stateLabel(r)}`;
+    b.onclick = () => { selected = r.route; save("termui:selected", selected); render(); };
+    $("roots").appendChild(b);
+  }
+  showRoot();
+  if (!selected) {
+    $("title").textContent = t("lead.none");
+    $("rootissues").replaceChildren();
+    $("kidlist").innerHTML = `<p class="empty">${t("kids.emptyRoot")}</p>`;
+    return;
+  }
+  const root = byRoute(selected);
+  $("title").textContent = root.name;
+  $("rootstate").dataset.h = health(root) === "bad" ? "bad" : root.issues?.some(i => i.level === "ask" || i.level === "flag") ? "warn" : health(root);
+  $("rootstate").textContent = stateLabel(root);
+  $("rootmodel").textContent = modelOf(root);
+  syncModel($("roottools"), root);
+  paintToggle($("roottools").querySelector('[data-a="toggle"]'), root);
+  paintOverlay($("rootterm"), root);
+  paintIssues($("rootissues"), root.issues, root.route);
+
+  const ks = kids(selected);
+  const open = openOf(selected).filter(n => byRoute(n));
+  const f = focusOf(selected);
+  const focus = ks.some(k => k.route === f) ? f : null;
+  const alive = ks.filter(k => k.running).length;
+  const issues = ks.filter(k => ["bad", "warn"].includes(health(k)) || k.issues?.some(i => i.level === "ask" || i.level === "flag")).length;
+  const working = ks.filter(k => k.state === "working").length;
+  $("kidcount").textContent = t("kids.count", { alive, total: ks.length }) + (working ? t("kids.working", { n: working }) : "") + (issues ? t("kids.issues", { n: issues }) : "");
+  $("closeAll").disabled = !open.length;
+  $("kidcol").classList.toggle("focus", !!focus);
+  for (const [n, c] of cards) if (!ks.some(k => k.route === n)) { c.live?.dispose(); c.el.remove(); cards.delete(n); }
+  const list = $("kidlist");
+  list.querySelector(".empty")?.remove();
+  if (!ks.length) list.innerHTML = `<p class="empty">${t("kids.empty")}</p>`;
+  for (const k of ks) {
+    const c = cardFor(k);
+    const isOpen = open.includes(k.route);
+    const h = health(k);
+    c.el.dataset.status = h;
+    c.el.dataset.h = h === "bad" ? "bad" : k.issues?.some(i => i.level === "ask" || i.level === "flag") ? "warn" : h;
+    c.el.classList.toggle("open", isOpen);
+    c.el.classList.toggle("focused", focus === k.route);
+    const head = c.el.querySelector(".head");
+    head.setAttribute("aria-expanded", String(isOpen));
+    head.style.paddingLeft = `calc(12px + 16px * ${Math.max(0, k.depth - root.depth - 1)})`;
+    const title = c.el.querySelector(".name");
+    title.textContent = k.route.slice(root.route.length + 1);
+    title.title = k.route;
+    c.el.querySelector(".dot").dataset.h = h;
+    const pill = c.el.querySelector(".st");
+    pill.dataset.h = h;
+    pill.textContent = stateLabel(k);
+    c.el.querySelector(".model").textContent = modelOf(k);
+    syncModel(c.el.querySelector(".bar"), k);
+    c.el.querySelector(".purpose").textContent = k.purpose ?? k.folder;
+    if (h === "bad" || h === "warn") {
+      c.el.querySelector(".alert span").textContent = h === "warn" ? t("alert.hung") : `${t("alert.crash")}${k.exit ? ` (${k.exit})` : ""}`;
+      const fix = c.el.querySelector('[data-a="fix"]');
+      fix.className = `btn ${h === "bad" ? "danger" : "warn"}`;
+      fix.innerHTML = `${ic("restart")}${h === "bad" ? t("alert.restartNow") : t("alert.restart")}`;
+    }
+    paintIssues(c.el.querySelector(".issues"), k.issues, k.route);
+    paintToggle(c.el.querySelector('[data-a="toggle"]'), k);
+    const fb = c.el.querySelector('[data-a="focus"]');
+    const isFocus = focus === k.route;
+    fb.innerHTML = ic(isFocus ? "min" : "max");
+    fb.title = isFocus ? t("card.collapse") : t("card.expand");
+    fb.setAttribute("aria-label", fb.title);
+    const host = c.el.querySelector(".termwrap");
+    if (isOpen && c.live?.closed) { c.live.dispose(); c.live = undefined; }
+    if (isOpen && !c.live) c.live = attach(k.route, host);
+    if (!isOpen && c.live) { c.live.dispose(); c.live = undefined; }
+    if (isOpen) paintOverlay(host, k);
+    if (c.el.parentElement !== list) list.appendChild(c.el);
+  }
+}
+
+$("closeAll").onclick = () => { save(`termui:open:${selected}`, []); save(`termui:focus:${selected}`, null); render(); };
+$("editCancel").onclick = () => $("editDlg").close();
+$("editSave").onclick = () => void saveEdit(false);
+$("editSaveRestart").onclick = () => void saveEdit(true);
+
+// Draggable split between root terminal and child column.
+$("kidcol").style.width = `${ls("termui:kidw", 520)}px`;
+$("split").onmousedown = e => {
+  e.preventDefault();
+  const move = ev => { const w = Math.max(300, Math.min(window.innerWidth - 600, window.innerWidth - ev.clientX)); $("kidcol").style.width = `${w}px`; save("termui:kidw", w); };
+  const up = () => { removeEventListener("mousemove", move); removeEventListener("mouseup", up); };
+  addEventListener("mousemove", move);
+  addEventListener("mouseup", up);
+};
+
+function apply(list) {
+  const sig = l => JSON.stringify(l.map(s => [s.route, s.depth, s.name, s.running, s.state, s.hung, s.exit, s.desired, s.realModel, s.model, s.purpose, s.folder, s.issues]));
+  const changed = sig(list) !== sig(sessions);
+  sessions = list;
+  if (changed || rootLive?.closed || [...cards.values()].some(c => c.live?.closed)) render();
+}
+const refresh = async () => apply(await (await fetch("/api/sessions")).json());
+
+const defaults = await (await fetch("/api/recipe-defaults?kind=root")).json();
+const catalog = CATALOG;
+
+// New-root wizard: identity and mission -> MCP servers -> skills. Create = POST with the whole selection.
+let wizStep = 1;
+const sel = { mcp: new Set(), skills: new Set() };
+
+function checkRow(list, value, label, note, checked, off) {
+  const row = document.createElement("label");
+  row.className = "check";
+  row.innerHTML = `<input type="checkbox" value="${value}"><b></b><small></small>`;
+  row.title = note || label;
+  row.querySelector("b").textContent = label;
+  const small = row.querySelector("small");
+  if (off) { small.className = "off"; small.textContent = note; }
+  else small.textContent = note;
+  const box = row.querySelector("input");
+  box.checked = checked;
+  box.onchange = () => (box.checked ? list.add(value) : list.delete(value));
+  return row;
+}
+
+function fillWizard() {
+  $("wizModel").innerHTML = (catalog.models ?? []).map(m => `<option value="${m}">${m}</option>`).join("");
+  $("wizModel").value = defaults.model?.split(":")[0] ?? "";
+  $("wizThinking").innerHTML = THINKING.map(l => `<option value="${l}">${l || t("edit.thinkingDefault")}</option>`).join("");
+  $("wizThinking").value = defaults.thinking ?? "";
+  const mcp = $("wizMcp");
+  mcp.replaceChildren();
+  sel.mcp.clear();
+  for (const [name, d] of Object.entries(catalog.mcpServers ?? {})) {
+    const on = d.enabled !== false;
+    if (on) sel.mcp.add(name);
+    mcp.appendChild(checkRow(sel.mcp, name, name, on ? "" : t("wiz.disabledInConfig"), on, !on));
+  }
+  const sk = $("wizSkills");
+  sk.replaceChildren();
+  sel.skills.clear();
+  // Orchestrator skills plus omp's own user-level skills, all on by default.
+  // Leaving everything checked sends skills:null (omp keeps its defaults, future skills included);
+  // unchecking any row switches the session to an explicit allowlist.
+  const seen = new Set();
+  const rows = [...(catalog.workspaceSkills ?? []).map(s => ({ name: s.name, note: s.role, on: true })),
+                ...(catalog.skills ?? []).map(s => ({ name: s.name, note: "omp user", on: true }))];
+  for (const r of rows) {
+    if (seen.has(r.name)) continue;
+    seen.add(r.name);
+    if (r.on) sel.skills.add(r.name);
+    sk.appendChild(checkRow(sel.skills, r.name, r.name, r.note, r.on, false));
+  }
+  $("wizErr").hidden = true;
+  wizGo(1);
+}
+
+function wizGo(step) {
+  wizStep = step;
+  for (const sec of document.querySelectorAll("#wizForm section")) sec.hidden = Number(sec.dataset.w) !== step;
+  for (const dot of document.querySelectorAll(".step")) dot.classList.toggle("on", Number(dot.dataset.s) <= step);
+  $("wizBack").hidden = step === 1;
+  $("wizNext").hidden = step === 2;
+  $("wizDone").hidden = step !== 2;
+}
+
+$("newRoot").querySelector("summary").addEventListener("click", e => { e.preventDefault(); fillWizard(); $("wizDlg").showModal(); });
+$("wizCancel").onclick = () => $("wizDlg").close();
+$("wizBack").onclick = () => wizGo(Math.max(1, wizStep - 1));
+$("wizNext").onclick = () => wizGo(Math.min(2, wizStep + 1));
+$("wizDone").onclick = async () => {
+  const name = $("wizName").value.trim(), purpose = $("wizPurpose").value.trim();
+  const r = await api("/api/sessions", {
+    parent: null, name, purpose, start: true,
+    model: $("wizModel").value, thinking: $("wizThinking").value || null,
+    mcp: [...sel.mcp], skills: [...document.querySelectorAll("#wizSkills input")].every(b => b.checked) ? null : [...sel.skills],
+  });
+  $("wizErr").hidden = r.ok;
+  if (!r.ok) return void ($("wizErr").textContent = await r.text());
+  $("wizDlg").close();
+  $("wizName").value = ""; $("wizPurpose").value = "";
+  selected = name; save("termui:selected", selected);
+  await refresh();
+  await refreshAux();
+};
+
+await document.fonts.load("13px 'JBMono Nerd'").catch(() => {});
+await refresh();
+render();
+await refreshAux();
+setInterval(() => { refreshAux().catch(() => {}); }, 10_000);
+
+// Live state: server pushes the session list on change and a ping every 10 s; silence or error = server down.
+let lastMsg = Date.now();
+const conn = up => {
+  $("conn").hidden = up;
+  $("conndot").dataset.h = up ? "ok" : "bad";
+  $("conntext").textContent = up ? t("conn.ok") : t("conn.down");
+};
+function listen() {
+  const es = new EventSource("/api/events");
+  es.onmessage = e => { lastMsg = Date.now(); conn(true); apply(JSON.parse(e.data)); };
+  es.addEventListener("open", () => { lastMsg = Date.now(); conn(true); });
+  es.addEventListener("ping", () => { lastMsg = Date.now(); conn(true); }); // SSE comments never reach JS, so the ping is a named event
+  es.onerror = () => conn(false); // EventSource retries by itself
+}
+setInterval(() => Date.now() - lastMsg > 25_000 && conn(false), 5_000);
+listen();
+</script>
+</body>
+</html>
