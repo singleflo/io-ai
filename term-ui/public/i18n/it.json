@@ -109,5 +109,7 @@
   "tree.stopConfirm": "Fermare {route} e le sue {n} sessioni figlie? Prima le figlie, poi la padre; omp ha il tempo di salvare.",
   "tree.killConfirm": "Uccidere {route} e le sue {n} sessioni figlie? Solo per sessioni bloccate: stop immediato.",
   "kids.working": "{n} al lavoro",
-  "tools.repaint": "Ridisegna il terminale (corregge lo sfasamento)"
+  "tools.repaint": "Ridisegna il terminale (corregge lo sfasamento)",
+  "wiz.folder": "Cartella esistente (facoltativa)",
+  "wiz.folderHint": "Vuoto = la cartella si crea nel workspace. Con un path (es. /Users/crotti/VSC/ODOO18) la sessione gira lì e nel workspace resta solo un collegamento: spostare o archiviare il link non tocca la cartella."
 }

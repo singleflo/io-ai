@@ -135,7 +135,9 @@ async function pass() {
     if (unmanagedEpoch !== catalogEpoch) {
       const files = await bucketSessions(s.folder);
       const known2 = new Set([r.sessionId, ...r.previousSessionIds]);
-      const extra = files.filter(f => !known2.has(f.id));
+      // Pre-existing omp sessions in the folder (e.g. a live one) are never offered for adoption.
+      const since = Date.parse(r.createdAt ?? "") || 0;
+      const extra = files.filter(f => !known2.has(f.id) && f.birthMs > since);
       if (extra.length) {
         s.latestUnmanaged = extra[0].id;
         setIssue(s, "unmanaged-sessions", "info", `${extra.length} other omp session(s) exist for this folder`, ["adopt-latest", "dismiss"]);

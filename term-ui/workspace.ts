@@ -1,7 +1,7 @@
 // Workspace model: a session is a folder containing `.orch/session.json`; routes are relative folder paths.
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, relative, sep } from "node:path";
+import { isAbsolute, join, relative, sep } from "node:path";
 
 export type Roles = { default?: string; task?: string; smol?: string; plan?: string; slow?: string };
 export type Recipe = {
@@ -26,6 +26,8 @@ export type Found = {
   route: string;
   name: string;
   folder: string;
+  linked?: boolean; // folder is reached through a workspace link (.orch/link.json); linkDir is the route's own directory
+  linkDir?: string;
   parent: string | null;
   kind: Kind;
   depth: number;
@@ -43,6 +45,15 @@ export function workspaceRoot(): string {
 
 export const orchDir = (ws: string) => join(ws, ".orch");
 export const sessionFile = (folder: string) => join(folder, ".orch", "session.json");
+export const linkFile = (dir: string) => join(dir, ".orch", "link.json");
+export const readLink = (dir: string): string | undefined => {
+  try {
+    const target = (JSON.parse(readFileSync(linkFile(dir), "utf8")) as { target?: string }).target;
+    return target && isAbsolute(target) ? target : undefined;
+  } catch {
+    return undefined;
+  }
+};
 export const toRoute = (ws: string, folder: string) => relative(ws, folder).split(sep).join("/");
 export const peerOf = (route: string) => route.replaceAll("/", ".");
 
@@ -101,14 +112,21 @@ export function scanWorkspace(ws: string): Found[] {
     for (const e of entries) {
       if (!e.isDirectory() || e.isSymbolicLink()) continue;
       if (e.name.startsWith(".") || e.name.startsWith("_") || e.name === "node_modules") continue;
-      const folder = join(dir, e.name);
-      if (existsSync(sessionFile(folder))) {
-        const { recipe, error } = readRecipe(folder);
-        const route = toRoute(ws, folder);
-        found.push({ route, name: e.name, folder, parent, kind: parent ? "child" : "root", depth, recipe, recipeError: error });
-        walk(folder, route, depth + 1);
+      const dir2 = join(dir, e.name);
+      const target = readLink(dir2); // a link registers an external folder as the session's folder
+      if (target !== undefined) {
+        const folder = existsSync(target) ? target : dir2;
+        const { recipe, error } = existsSync(target) ? readRecipe(folder) : { recipe: null, error: `link target missing: ${target}` };
+        const route = toRoute(ws, dir2);
+        found.push({ route, name: e.name, folder, linked: true, linkDir: dir2, parent, kind: parent ? "child" : "root", depth, recipe, recipeError: error });
+        // children of a linked session are links placed under the link directory; the target tree is not scanned
+      } else if (existsSync(sessionFile(dir2))) {
+        const { recipe, error } = readRecipe(dir2);
+        const route = toRoute(ws, dir2);
+        found.push({ route, name: e.name, folder: dir2, parent, kind: parent ? "child" : "root", depth, recipe, recipeError: error });
+        walk(dir2, route, depth + 1);
       } else {
-        walk(folder, parent, depth);
+        walk(dir2, parent, depth);
       }
     }
   };

@@ -504,6 +504,11 @@ export function observe(s: Session) {
 
 // `/move` inside the session: the session folder follows the conversation.
 function followCwd(s: Session, newCwd: string) {
+  if (s.linked) {
+    // The recipe lives in the external folder: following would move it out of the link's target.
+    setIssue(s, "cwd-moved-in-session", "ask", `the session moved to ${newCwd}, which a linked session cannot follow`, ["move-back"]);
+    return;
+  }
   const inside = resolve(newCwd).startsWith(resolve(ctx.ws) + "/") || resolve(newCwd).startsWith(resolve(ctx.ws) + "\\");
   if (inside && existsSync(newCwd) && !existsSync(sessionFile(newCwd))) {
     const oldRoute = s.route;

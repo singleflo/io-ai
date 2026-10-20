@@ -71,7 +71,7 @@ function validModel(m: string | undefined): boolean {
   return !m || !models || models.includes(m.split(":")[0]);
 }
 
-async function createSession(b: Partial<Recipe> & { parent?: string | null; name?: string; start?: boolean }): Promise<Response> {
+async function createSession(b: Partial<Recipe> & { parent?: string | null; name?: string; start?: boolean; folder?: string }): Promise<Response> {
   if (!b.name || !NAME_RE.test(b.name)) return bad("invalid name (a-z, 0-9, -; 2-32 chars)");
   let parentFolder = ctx.ws;
   if (b.parent) {
@@ -79,8 +79,15 @@ async function createSession(b: Partial<Recipe> & { parent?: string | null; name
     if (!p) return bad("unknown parent");
     parentFolder = p.folder;
   }
-  const folder = join(parentFolder, b.name);
-  if (existsSync(folder)) return bad("folder already exists");
+  const external = typeof b.folder === "string" && b.folder.trim() ? b.folder.trim() : undefined;
+  if (external && (!isAbsolute(external) || !existsSync(external) || !statSync(external).isDirectory())) return bad("folder must be an existing absolute path");
+  if (external) {
+    const rel = relative(resolve(ctx.ws), resolve(external));
+    if (!(rel.startsWith("..") || isAbsolute(rel))) return bad("folder inside the workspace does not need a link");
+    if (existsSync(join(external, ".orch", "session.json"))) return bad("folder is already a session");
+  }
+  const linkDir = join(parentFolder, b.name);
+  if (existsSync(linkDir)) return bad("folder already exists");
   if (!validModel(b.model)) return bad("unknown model");
   const kind = b.parent ? "child" : "root";
   const defaults = ctx.catalog ? recipeDefaults(ctx.catalog, kind) : {};
@@ -91,7 +98,9 @@ async function createSession(b: Partial<Recipe> & { parent?: string | null; name
     createdBy: b.createdBy ?? "cli",
     desired: b.start ? "running" : "stopped",
   });
-  mkdirSync(folder, { recursive: true });
+  const folder = external ?? linkDir;
+  mkdirSync(join(linkDir, ".orch"), { recursive: true }); // for links the recipe lives in the external folder
+  if (external) writeFileSync(join(linkDir, ".orch", "link.json"), `${JSON.stringify({ target: resolve(external) }, null, 2)}\n`);
   writeRecipe(folder, recipe);
   const tpl = templateFor(kind);
   if (tpl && !existsSync(join(folder, "AGENTS.md"))) writeFileSync(join(folder, "AGENTS.md"), tpl.replaceAll("{{name}}", b.name).replaceAll("{{purpose}}", b.purpose ?? ""));
@@ -134,14 +143,14 @@ async function parkSubtree(subtree: Session[]): Promise<Map<Session, Recipe["des
 }
 
 async function moveSubtree(s: Session, to: string): Promise<Response> {
+  const ownDir = (x: Session) => x.linkDir ?? x.folder; // a linked session moves its link, not the external folder
   const subtree = subtreeOf(s);
   if (subtree.some(x => x.state === "working" && x.proc)) return bad("busy: a session in the subtree is working", 409);
   const target = join(ctx.ws, to);
   if (existsSync(target) || !existsSync(dirname(target))) return bad("target exists or its parent folder is missing");
   const prev = await parkSubtree(subtree);
-  renameSync(s.folder, target);
-  for (const [x, desired] of prev) x.recipe!.desired = desired;
-  for (const [x] of prev) saveRecipe({ ...x, folder: join(target, relative(s.folder, x.folder)) });
+  renameSync(ownDir(s), target);
+  // desired states come back from the recipe files on rescan (parking only changed memory)
   await reconcile();
   return json({ ok: true });
 }
@@ -177,7 +186,7 @@ async function archiveSubtree(s: Session, force: boolean): Promise<Response> {
   const stamp = new Date().toISOString().replace(/[-:]/g, "").replace("T", "-").slice(0, 15);
   const target = join(ctx.ws, "_archive", `${s.route.replaceAll("/", "__")}-${stamp}`);
   mkdirSync(dirname(target), { recursive: true });
-  renameSync(s.folder, target);
+  renameSync(s.linkDir ?? s.folder, target); // a linked session archives its link, not the external folder
   for (const x of subtree) if (x.recipe?.sessionId) delete ctx.known[x.recipe.sessionId]; // archived, not orphaned
   writeFileSync(join(orchDir(ctx.ws), "known.json"), `${JSON.stringify(ctx.known, null, 2)}\n`);
   await reconcile();

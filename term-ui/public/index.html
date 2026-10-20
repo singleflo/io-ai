@@ -248,6 +248,11 @@
           <label for="wizPurpose" data-i18n="wiz.mission"></label>
           <textarea id="wizPurpose" rows="3" data-i18n-ph="wiz.missionPh" required></textarea>
         </div>
+        <div class="wiz-field wiz-wide">
+          <label for="wizFolder" data-i18n="wiz.folder"></label>
+          <input id="wizFolder" data-i18n-ph="wiz.folderPh" autocomplete="off">
+          <p class="wiz-hint" data-i18n="wiz.folderHint"></p>
+        </div>
         <div class="wiz-field">
           <label for="wizModel" data-i18n="roots.model"></label><select id="wizModel"></select>
         </div>
@@ -841,11 +846,12 @@ $("wizDone").onclick = async () => {
     parent: null, name, purpose, start: true,
     model: $("wizModel").value, thinking: $("wizThinking").value || null,
     mcp: [...sel.mcp], skills: [...document.querySelectorAll("#wizSkills input")].every(b => b.checked) ? null : [...sel.skills],
+    folder: document.getElementById("wizFolder").value.trim() || undefined,
   });
   $("wizErr").hidden = r.ok;
   if (!r.ok) return void ($("wizErr").textContent = await r.text());
   $("wizDlg").close();
-  $("wizName").value = ""; $("wizPurpose").value = "";
+  $("wizName").value = ""; $("wizPurpose").value = ""; $("wizFolder").value = "";
   selected = name; save("termui:selected", selected);
   await refresh();
   await refreshAux();

@@ -5,7 +5,7 @@ const [command, ...args] = process.argv.slice(2);
 
 const USAGE = `usage: orch <command>
   list
-  spawn --name N --purpose T [--parent R] [--model M --thinking L --task M --smol M --compact N --mcp a,b|all|manual] [--start]
+  spawn --name N --purpose T [--parent R] [--model M --thinking L --task M --smol M --compact N --mcp a,b|all|manual] [--folder /abs/path] [--start]
   start R
   stop R
   restart R [--model M --thinking L --task M --smol M --compact N --mcp a,b|all|manual]
@@ -115,6 +115,7 @@ async function main(): Promise<void> {
         name: required(flag("name")),
         purpose: required(flag("purpose")),
         start: flags.start === true,
+        folder: flag("folder"),
         ...recipeFlags(),
       }));
       break;

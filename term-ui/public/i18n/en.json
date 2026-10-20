@@ -109,5 +109,7 @@
   "tree.stopConfirm": "Stop {route} and its {n} child session(s)? Children stop first, then the parent; omp is given time to save.",
   "tree.killConfirm": "Force-kill {route} and its {n} child session(s)? Only for stuck sessions: they are stopped immediately.",
   "kids.working": "{n} working",
-  "tools.repaint": "Redraw terminal (fixes misalignment)"
+  "tools.repaint": "Redraw terminal (fixes misalignment)",
+  "wiz.folder": "Existing folder (optional)",
+  "wiz.folderHint": "Leave empty to create the folder inside the workspace. With a path (e.g. /Users/me/VSC/ODOO18) the session runs there and the workspace keeps a link: move or archive the link, the folder stays put."
 }
