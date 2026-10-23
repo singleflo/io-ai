@@ -120,6 +120,7 @@ async function createSession(b: CreateBody): Promise<Response> {
   const external = typeof b.folder === "string" && b.folder.trim() ? b.folder.trim() : undefined;
   if (external && (!isAbsolute(external) || !existsSync(external) || !statSync(external).isDirectory())) return bad("folder must be an existing absolute path");
   let resumed: Recipe | undefined;
+  let pickId = Boolean(b.sessionId); // a conversation to start in: validated below, for new links and resumes alike
   if (external) {
     const rel = relative(resolve(ctx.ws), resolve(external));
     if (!(rel.startsWith("..") || isAbsolute(rel))) return bad("folder inside the workspace does not need a link");
@@ -129,21 +130,24 @@ async function createSession(b: CreateBody): Promise<Response> {
       if (!hasRecipe) return bad("no session to resume in that folder");
       const owner = [...ctx.sessions.values()].find(x => samePath(x.folder, external));
       if (owner) return bad(`folder already used by ${owner.route}`, 409);
-      if (b.sessionId || b.preset) return bad("resume cannot be combined with sessionId or preset");
+      if (b.preset) return bad("resume cannot be combined with a preset");
       const read = readRecipe(external);
       if (!read.recipe) return bad(`unreadable recipe: ${read.error}`);
       resumed = read.recipe;
-      if (resumed.sessionId && (await heldLeases([resumed.sessionId]))[resumed.sessionId]) return bad("conversation is open in another omp process", 409);
-      if (resumed.sessionId && !findSessionFile(resumed.sessionId)) {
-        // the conversation file is gone (the `conversation-missing` warning): start a new one instead of a session-lost stop
-        resumed.previousSessionIds = [...resumed.previousSessionIds, resumed.sessionId];
-        resumed.sessionId = null;
+      if (b.sessionId === resumed.sessionId) pickId = false; // picking the recipe's own conversation = no pick
+      if (!pickId) {
+        if (resumed.sessionId && (await heldLeases([resumed.sessionId]))[resumed.sessionId]) return bad("conversation is open in another omp process", 409);
+        if (resumed.sessionId && !findSessionFile(resumed.sessionId)) {
+          // the conversation file is gone (the `conversation-missing` warning): start a new one instead of a session-lost stop
+          resumed.previousSessionIds = [...resumed.previousSessionIds, resumed.sessionId];
+          resumed.sessionId = null;
+        }
       }
     }
   } else if (b.resume) return bad("resume needs a folder");
   // `sessionId`: a conversation of the linked folder ("latest" = newest); null/absent = a new conversation
   let sessionId: string | null = null;
-  if (b.sessionId) {
+  if (pickId && b.sessionId) {
     if (!external) return bad("sessionId needs a folder");
     const files = await bucketSessions(external);
     const id = b.sessionId === "latest" ? files[0]?.id : b.sessionId;
@@ -152,6 +156,11 @@ async function createSession(b: CreateBody): Promise<Response> {
     const owner = [...ctx.sessions.values()].find(x => x.recipe?.sessionId === id);
     if (owner) return bad(`conversation already belongs to ${owner.route}`, 409);
     sessionId = id;
+    if (resumed && resumed.sessionId !== id) {
+      // the picked conversation replaces the recipe's one, which stays in the history
+      if (resumed.sessionId) resumed.previousSessionIds = [...resumed.previousSessionIds, resumed.sessionId];
+      resumed.sessionId = id;
+    }
   }
   const linkDir = join(parentFolder, b.name);
   if (existsSync(linkDir)) return bad("folder already exists");

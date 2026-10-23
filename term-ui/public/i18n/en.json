@@ -213,6 +213,7 @@
   "wiz.convNewNote": "Start fresh in this folder",
   "wiz.convUntitled": "Untitled conversation",
   "wiz.convOpen": "open elsewhere",
+  "wiz.convCurrent": "current session",
   "wiz.convNone": "No earlier conversations in this folder.",
   "wiz.isSession": "This folder is already a session.",
   "wiz.needFolder": "Choose an existing folder that is not already a session.",

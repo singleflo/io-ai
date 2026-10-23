@@ -213,6 +213,7 @@
   "wiz.convNewNote": "Riparti da zero in questa cartella",
   "wiz.convUntitled": "Conversazione senza titolo",
   "wiz.convOpen": "aperta altrove",
+  "wiz.convCurrent": "sessione attuale",
   "wiz.convNone": "Nessuna conversazione precedente in questa cartella.",
   "wiz.isSession": "Questa cartella è già una sessione.",
   "wiz.needFolder": "Scegli una cartella esistente che non sia già una sessione.",
