@@ -127,6 +127,9 @@
   .chip-lead { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px 0 6px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
   .chip-lead svg { width: 14px; height: 14px; }
   .tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .tools .sep { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
+  .tools .cl { display: flex; align-items: center; gap: 2px; }
+  .tools .tools-end { margin-left: auto; }
   .termwrap { position: relative; flex: 1; min-height: 0; background: var(--term); border-radius: var(--radius); padding: 10px 6px 6px 12px; }
   #center .termwrap { border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); }
   .termwrap .xterm { height: 100%; }
@@ -553,12 +556,16 @@ function paintOverlay(host, s) {
 const toolsHtml = () => `<div class="group"><select aria-label="${t("tools.modelAria")}">${MODELS.map(m => `<option value="${m}">${m}</option>`).join("")}</select>
   <button class="btn" data-a="restart" title="${t("tools.restartTitle")}">${ic("restart")}${t("tools.restart")}</button></div>
   <button class="btn" data-a="toggle"></button>
+  <span class="sep" aria-hidden="true"></span>
+  <div class="cl">
   <button class="btn icon ghost" data-a="new-child" title="${t("tools.newChild")}" aria-label="${t("tools.newChild")}">${ic("plus")}</button>
   <button class="btn icon ghost" data-a="edit" title="${t("tools.edit")}" aria-label="${t("tools.edit")}">${ic("edit")}</button>
-  <button class="btn icon ghost" data-a="archive" title="${t("tools.archive")}" aria-label="${t("tools.archive")}">${ic("archive")}</button>
-  <button class="btn icon ghost" data-a="repaint" title="${t("tools.repaint")}" aria-label="${t("tools.repaint")}">${ic("repaint")}</button>
+  <button class="btn icon ghost" data-a="repaint" title="${t("tools.repaint")}" aria-label="${t("tools.repaint")}">${ic("repaint")}</button></div>
+  <span class="sep" aria-hidden="true"></span>
+  <div class="cl tools-end">
   <button class="btn icon ghost" data-a="stop-subtree" title="${t("tools.stopSubtree")}" aria-label="${t("tools.stopSubtree")}">${ic("treestop")}</button>
-  <button class="btn icon ghost" data-a="kill-subtree" title="${t("tools.killSubtree")}" aria-label="${t("tools.killSubtree")}">${ic("crash")}</button>`;
+  <button class="btn icon ghost" data-a="kill-subtree" title="${t("tools.killSubtree")}" aria-label="${t("tools.killSubtree")}">${ic("crash")}</button>
+  <button class="btn icon ghost" data-a="archive" title="${t("tools.archive")}" aria-label="${t("tools.archive")}">${ic("archive")}</button></div>`;
 function wireTools(el, route) {
   el.querySelector('[data-a="restart"]').onclick = e => { e.stopPropagation(); api(`/api/sessions/${enc(route)}/restart`, { model: el.querySelector("select").value }).then(refresh); };
   el.querySelector('[data-a="toggle"]').onclick = e => { e.stopPropagation(); api(`/api/sessions/${enc(route)}/${byRoute(route).running ? "stop" : "start"}`, {}).then(refresh); };
