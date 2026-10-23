@@ -10,7 +10,7 @@ const [command, ...args] = process.argv.slice(2);
 const USAGE = `usage: orch <command>
   url   # login URL of the term-ui (open it once in the browser)
   list
-  spawn --name N --purpose T [--parent R] [--model M --thinking L --task M --smol M --compact N --mcp a,b|all|manual --skills a,b|all] [--folder /abs/path [--session id|latest|new]] [--start]
+  spawn --name N --purpose T [--parent R] [--model M --thinking L --task M --smol M --compact N --mcp a,b|all|manual --skills a,b|all] [--folder /abs/path [--session id|latest|new | --resume]] [--start]
   start R
   stop R
   restart R [--model M --thinking L --task M --smol M --compact N --mcp a,b|all|manual --skills a,b|all]
@@ -21,7 +21,7 @@ const USAGE = `usage: orch <command>
   archive-list
   restore <archive id>
   folder <absolute folder>   # project skills, project MCP and omp conversations of a folder
-  attach <absolute folder> [--parent R] [--name N] [--session id|latest|new] [--start]   # without --session: list conversations; with it: link the folder as a child
+  attach <absolute folder> [--parent R] [--name N] [--session id|latest|new | --resume] [--start]   # without --session: list conversations; with it: link the folder as a child; --resume links the folder's existing recipe (orphan session)
   adopt <absolute folder> [--session id]
   resolve R <code> <action>
   models [filter]
@@ -56,7 +56,7 @@ for (let i = 0; i < args.length; i++) {
     continue;
   }
   const key = arg.slice(2);
-  if (key === "start" || key === "refresh" || key === "restart" || key === "force" || key === "workspace" || key === "new-conversation") {
+  if (key === "start" || key === "refresh" || key === "restart" || key === "force" || key === "workspace" || key === "new-conversation" || key === "resume") {
     flags[key] = true;
     continue;
   }
@@ -153,10 +153,11 @@ async function main(): Promise<void> {
       console.log(await call("/api/sessions", {
         parent: flag("parent") ?? process.env.ORCH_ROUTE ?? null,
         name: required(flag("name")),
-        purpose: flag("preset") ? flag("purpose") : required(flag("purpose")),
+        purpose: flag("preset") || flags.resume === true ? flag("purpose") : required(flag("purpose")),
         start: flags.start === true,
         ...(flag("preset") ? { preset: flag("preset") } : {}),
         folder,
+        ...(flags.resume === true ? { resume: true } : {}),
         ...(session ? { sessionId: session === "new" ? null : session } : {}),
         ...recipeFlags(),
       }));
@@ -208,7 +209,8 @@ async function main(): Promise<void> {
       const folder = pos[0];
       if (!folder || pos.length !== 1) throw new Error(USAGE);
       const session = flag("session");
-      if (!session) {
+      const resume = flags.resume === true;
+      if (!session && !resume) {
         const info = JSON.parse(await call(`/api/folder-info?folder=${encodeURIComponent(folder)}`)) as { conversations: unknown[] };
         console.log(JSON.stringify(info.conversations.length ? { conversations: info.conversations } : { conversations: [], hint: "no omp conversation in that folder yet: attach again with --session new" }));
         break;
@@ -217,7 +219,8 @@ async function main(): Promise<void> {
         parent: flag("parent") ?? process.env.ORCH_ROUTE ?? null,
         name: flag("name") ?? basename(folder),
         folder,
-        sessionId: session === "new" ? null : session,
+        ...(session ? { sessionId: session === "new" ? null : session } : {}),
+        ...(resume ? { resume: true } : {}),
         start: flags.start === true,
       }));
       break;

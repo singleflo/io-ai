@@ -271,6 +271,16 @@
   details.adv summary { cursor: pointer; color: var(--fg-2); font-size: 13px; padding: 2px 0; }
   details.adv[open] summary { margin-bottom: 10px; }
   .wiz-info { display: flex; flex-direction: column; gap: 10px; }
+  .wiz-resume { padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--h) 40%, var(--line)); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--h) 7%, var(--s2)); display: flex; flex-direction: column; gap: 8px; }
+  .wiz-resume h4 { margin: 0; font-size: 13px; font-weight: 600; }
+  .wiz-resume dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 12px; }
+  .wiz-resume dt { color: var(--muted); }
+  .wiz-resume dd { margin: 0; min-width: 0; color: var(--fg-2); overflow-wrap: anywhere; }
+  .wiz-resume code { font: 12px var(--mono); color: var(--fg); }
+  .wiz-resume .wiz-hint { margin: 0; }
+  .wiz-warns { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+  .wiz-warns li { padding-left: 10px; border-left: 2px solid var(--h); color: color-mix(in srgb, var(--h) 85%, white); line-height: 1.5; }
+  #wizOpenHolder { align-self: flex-start; }
   #wizTools, #editTools { margin-top: 20px; }
   #editExtra { margin-top: 20px; }
   .mono-in { font-family: var(--mono); font-size: 12px; }
@@ -524,6 +534,8 @@
           <div class="wiz-info" id="wizInfo" hidden>
             <div class="chips" id="wizChips"></div>
             <div class="formerr" id="wizInfoErr" hidden></div>
+            <button class="btn" type="button" id="wizOpenHolder" hidden></button>
+            <div class="wiz-resume" id="wizResume" data-h="ok" hidden></div>
             <fieldset class="wiz-field" id="wizConvSet">
               <legend data-i18n="wiz.conversation"></legend>
               <div class="checks one" id="wizConvs"></div>
@@ -1779,7 +1791,7 @@ const refresh = async () => apply(await (await fetch("/api/sessions")).json());
 
 // Session wizard, shared by "New root" and "New child": place (name, mission, folder, conversation) -> model and tools.
 // Create = one POST /api/sessions with the whole selection.
-const wiz = { mode: "root", parent: null, defaults: {}, presets: [], preset: null, res: null, loadedFolder: null, seq: 0, timer: 0, tools: null, toolsFor: null, convModel: null };
+const wiz = { mode: "root", parent: null, defaults: {}, presets: [], preset: null, res: null, loadedFolder: null, seq: 0, timer: 0, tools: null, toolsFor: null, convModel: null, resumeKey: null, resumeFill: null, ack: false, ackKey: null };
 let wizStep = 1;
 const wizLoc = () => document.querySelector('input[name="wizLoc"]:checked').value;
 const wizConv = () => document.querySelector('input[name="wizConv"]:checked')?.value ?? "";
@@ -1793,7 +1805,7 @@ async function openWizard(mode, parent = null) {
   ]);
   wiz.defaults = defaults;
   wiz.presets = presets;
-  Object.assign(wiz, { mode, parent, res: null, loadedFolder: null, seq: wiz.seq + 1, tools: null, toolsFor: null, convModel: null, preset: null });
+  Object.assign(wiz, { mode, parent, res: null, loadedFolder: null, seq: wiz.seq + 1, tools: null, toolsFor: null, convModel: null, preset: null, resumeKey: null, resumeFill: null, ack: false, ackKey: null });
   clearTimeout(wiz.timer);
   $("wizTitle").textContent = mode === "child" ? t("wiz.titleChild", { parent }) : t("wiz.title");
   $("wizLocNew").textContent = mode === "child" ? t("wiz.locNewChild", { parent }) : t("wiz.locNew");
@@ -1807,6 +1819,10 @@ async function openWizard(mode, parent = null) {
   $("wizRoleField").hidden = mode !== "child" || !wiz.presets.length; // presets are child roles
   $("wizRoleSum").hidden = true;
   $("wizTools").replaceChildren();
+  $("wizRole").disabled = false;
+  $("wizResume").replaceChildren();
+  $("wizNext").disabled = false;
+  $("wizOpenHolder").hidden = true;
   wizError();
   wizGo(1);
   $("wizDlg").showModal();
@@ -1820,13 +1836,138 @@ const chip = (icon, text) => {
   return el;
 };
 
+// Resuming: an orphan recipe (session.json without a link) in the picked folder. The recipe owns the conversation, so no conversation list;
+// step 2 starts from its values and the role (a preset) cannot be combined with it.
+const wizResuming = () => {
+  const ex = wiz.res?.info?.existing;
+  return wizLoc() === "existing" && ex?.state === "orphan" && wiz.loadedFolder === $("wizFolder").value.trim() ? ex : null;
+};
+
+function resumeName(folder) {
+  const base = folder.split("/").filter(Boolean).pop() ?? "";
+  const name = base.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 32).replace(/-$/, "");
+  return new RegExp(`^(?:${$("wizName").pattern})$`).test(name) ? name : "";
+}
+
+function wizDefaultsInto() {
+  fillSelect($("wizModel"), modelItems(defaultModel()), defaultModel());
+  fillSelect($("wizThinking"), thinkingItems(), wiz.defaults.thinking ?? "");
+  $("wizCompact").value = wiz.defaults.compactPercent ?? "";
+}
+
+// Warning codes of the orphan recipe (server-computed). conversation-live blocks; the rest need the explicit acknowledgement.
+const resumeWarnings = ex => ex?.warnings ?? [];
+const resumeBlocked = ex => {
+  const warns = resumeWarnings(ex);
+  return warns.includes("conversation-live") || (warns.length > 0 && !wiz.ack);
+};
+const warnText = (code, ex) => (DICT[`wiz.warn.${code}`] !== undefined ? t(`wiz.warn.${code}`, { model: ex.model ?? "" }) : code);
+
+function paintResume() {
+  const box = $("wizResume");
+  const ex = wizResuming();
+  box.hidden = !ex;
+  $("wizNext").disabled = resumeBlocked(ex);
+  if (!ex) return box.replaceChildren();
+  const warns = resumeWarnings(ex);
+  const live = warns.includes("conversation-live");
+  box.dataset.h = live ? "bad" : warns.length ? "warn" : "ok";
+  const ackKey = `${$("wizFolder").value.trim()}|${warns.join(",")}`;
+  if (wiz.ackKey !== ackKey) { wiz.ackKey = ackKey; wiz.ack = false; } // another folder or other facts: the confirmation no longer applies
+  $("wizNext").disabled = resumeBlocked(ex);
+  const title = document.createElement("h4");
+  title.textContent = t("wiz.resumeTitle");
+  const dl = document.createElement("dl");
+  const row = (key, value, mono) => {
+    if (!value) return;
+    const dt = document.createElement("dt");
+    dt.textContent = t(key);
+    const dd = document.createElement("dd");
+    if (mono) { const code = document.createElement("code"); code.textContent = value; dd.appendChild(code); } else dd.textContent = value;
+    dl.append(dt, dd);
+  };
+  row("roots.model", ex.model, true);
+  row("wiz.conversation", ex.sessionId?.slice(0, 8), true);
+  row("wiz.resumePurpose", ex.purpose);
+  const nodes = [title, dl];
+  if (warns.length) {
+    const ul = document.createElement("ul");
+    ul.className = "wiz-warns";
+    for (const code of warns) {
+      const li = document.createElement("li");
+      li.dataset.h = code === "conversation-live" ? "bad" : "warn";
+      li.textContent = warnText(code, ex);
+      ul.appendChild(li);
+    }
+    nodes.push(ul);
+    if (!live) {
+      const ackRow = document.createElement("div");
+      ackRow.className = "checks one";
+      const row = checkRow({ type: "checkbox", name: "wizWarnAck", value: "ack", label: t("wiz.warnAck"), note: "", checked: wiz.ack });
+      row.querySelector("input").onchange = e => { wiz.ack = e.target.checked; $("wizNext").disabled = resumeBlocked(ex); };
+      ackRow.appendChild(row);
+      nodes.push(ackRow);
+    }
+  }
+  const opt = document.createElement("div");
+  opt.className = "checks one";
+  opt.appendChild(checkRow({ type: "radio", name: "wizResumeOpt", value: "resume", label: t("wiz.resume"), note: "", checked: true }));
+  const note = document.createElement("p");
+  note.className = "wiz-hint";
+  note.textContent = t("wiz.resumeNote");
+  nodes.push(opt, note);
+  box.replaceChildren(...nodes);
+}
+
+// Called whenever the picked folder, its loaded facts or the location radio change: applies or undoes the recipe prefill.
+function syncResume() {
+  const ex = wizResuming();
+  $("wizRole").disabled = !!ex;
+  const key = ex ? `${$("wizFolder").value.trim()}|${ex.sessionId ?? ""}|${resumeWarnings(ex).join(",")}` : null;
+  if (key !== wiz.resumeKey) {
+    const prev = wiz.resumeFill;
+    wiz.resumeKey = key;
+    wiz.resumeFill = null;
+    wiz.toolsFor = null; // step 2 is rebuilt from the recipe (or from the defaults)
+    wiz.ack = false; // the warnings acknowledged belong to the previous folder
+    wiz.ackKey = null;
+    if (prev) {
+      if ($("wizPurpose").value === prev.purpose) $("wizPurpose").value = "";
+      if ($("wizName").value === prev.name) $("wizName").value = "";
+      wizDefaultsInto();
+    }
+    if (ex) {
+      if ($("wizRole").value) { $("wizRole").value = ""; $("wizRole").onchange(); }
+      const fill = { purpose: "", name: "" };
+      if (!$("wizPurpose").value.trim() && ex.purpose) $("wizPurpose").value = fill.purpose = ex.purpose;
+      if (!$("wizName").value.trim()) $("wizName").value = fill.name = resumeName($("wizFolder").value.trim());
+      const model = resumeWarnings(ex).includes("model-unavailable") ? defaultModel() : (ex.model ?? "").split(":")[0]; // a missing model would only fail at start: begin on the default
+      fillSelect($("wizModel"), modelItems(model), model);
+      fillSelect($("wizThinking"), thinkingItems(), ex.thinking ?? "");
+      $("wizCompact").value = ex.compactPercent ?? "";
+      wiz.resumeFill = fill;
+    }
+  }
+  paintResume();
+}
+
 // Folder facts under the path field: chips, problems, and the conversations that can be resumed.
 function paintInfo() {
   const res = wiz.res;
   $("wizInfo").hidden = !res;
+  syncResume();
+  $("wizOpenHolder").hidden = true;
   if (!res) return;
   const info = res.info;
-  const problems = res.error ? [res.error] : [...(info.isSession ? [t("wiz.isSession")] : []), ...(info.errors ?? [])];
+  const existing = info?.existing;
+  const holder = existing?.state === "managed" && existing.route && byRoute(existing.route) ? existing.route : null;
+  $("wizOpenHolder").hidden = !holder;
+  $("wizOpenHolder").dataset.route = holder ?? "";
+  $("wizOpenHolder").textContent = holder ? t("wiz.openHolder", { route: holder }) : "";
+  const problems = res.error ? [res.error] : [
+    ...(existing?.state === "managed" ? [t("wiz.folderUsedBy", { route: existing.route ?? "" })] : info.isSession && existing?.state !== "orphan" ? [t("wiz.isSession")] : []),
+    ...(info.errors ?? []),
+  ];
   $("wizInfoErr").hidden = !problems.length;
   $("wizInfoErr").textContent = problems.join(" · ");
   const chips = [];
@@ -1835,12 +1976,13 @@ function paintInfo() {
   if (info?.projectSkills.length) chips.push(chip("sparkles", t("wiz.chipSkills", { n: info.projectSkills.length })));
   if (info?.projectMcp.length) chips.push(chip("plug", t("wiz.chipMcp", { n: info.projectMcp.length })));
   $("wizChips").replaceChildren(...chips);
-  $("wizConvSet").hidden = !info || info.isSession;
+  const noConv = !info || info.isSession || !!existing;
+  $("wizConvSet").hidden = noConv;
   const list = $("wizConvs");
   const picked = wizConv();
   list.replaceChildren();
   $("wizConvNone").hidden = true;
-  if (!info || info.isSession) return;
+  if (noConv) return;
   list.appendChild(checkRow({ type: "radio", name: "wizConv", value: "", label: t("wiz.convNew"), note: t("wiz.convNewNote"), checked: !info.conversations.some(c => !c.live && c.id === picked) }));
   for (const c of info.conversations) {
     const note = [ago(c.modified), c.model, c.live ? t("wiz.convOpen") : null].filter(Boolean).join(" · ");
@@ -2061,7 +2203,9 @@ function wizGo(step) {
   if (wiz.toolsFor === key) return;
   wiz.toolsFor = key;
   const p = wiz.preset;
-  wiz.tools = renderTools($("wizTools"), { folderInfo: existing ? wiz.res?.info : undefined, recipe: p ? { mcp: p.mcp, skills: p.skills, tools: p.tools } : undefined });
+  const ex = wizResuming();
+  const recipe = ex ? { mcp: ex.mcp, skills: ex.skills, tools: ex.tools } : p ? { mcp: p.mcp, skills: p.skills, tools: p.tools } : undefined;
+  wiz.tools = renderTools($("wizTools"), { folderInfo: existing ? wiz.res?.info : undefined, recipe });
   paintRoleSummary();
 }
 
@@ -2101,9 +2245,10 @@ $("newRoot").querySelector("summary").addEventListener("click", e => { e.prevent
 for (const radio of document.querySelectorAll('input[name="wizLoc"]'))
   radio.onchange = () => {
     $("wizExisting").hidden = wizLoc() !== "existing";
+    syncResume();
     if (wizLoc() === "existing") void loadInfo();
   };
-$("wizFolder").oninput = () => scheduleInfo();
+$("wizFolder").oninput = () => { scheduleInfo(); syncResume(); }; // stale facts must not keep the resume prefill
 $("wizBrowse").onclick = async () => {
   const dir = await pickFolder({ start: $("wizFolder").value.trim() || undefined, title: t("wiz.browse") });
   if (!dir) return;
@@ -2126,28 +2271,39 @@ $("wizCancel").onclick = () => $("wizDlg").close();
 $("wizBack").onclick = () => wizGo(1);
 $("wizNext").onclick = async () => {
   wizError();
-  if (!$("wizName").reportValidity() || !$("wizPurpose").reportValidity()) return;
   if (wizLoc() === "existing") {
     clearTimeout(wiz.timer);
-    if (wiz.loadedFolder !== $("wizFolder").value.trim()) await loadInfo();
-    if (!wiz.res?.info || wiz.res.info.isSession) return wizError(t("wiz.needFolder"));
+    if (wiz.loadedFolder !== $("wizFolder").value.trim()) await loadInfo(); // also applies the recipe prefill (name, mission) the checks below need
+    const info = wiz.res?.info;
+    if (!info || info.existing?.state === "managed" || (info.isSession && info.existing?.state !== "orphan")) return wizError(t("wiz.needFolder"));
+    const resuming = wizResuming();
+    if (resumeBlocked(resuming)) return wizError(t(resumeWarnings(resuming).includes("conversation-live") ? "wiz.warn.conversation-live" : "wiz.warnAck"));
   }
+  if (!$("wizName").reportValidity() || !$("wizPurpose").reportValidity()) return;
   wizGo(2);
+};
+$("wizOpenHolder").onclick = () => {
+  const route = $("wizOpenHolder").dataset.route;
+  if (!route) return;
+  $("wizDlg").close();
+  openRoute(route);
 };
 $("wizForm").onsubmit = e => { e.preventDefault(); if (wizStep === 1) $("wizNext").click(); };
 $("wizDone").onclick = async () => {
   if (!wiz.tools || !$("wizCompact").reportValidity()) return;
   const name = $("wizName").value.trim();
   const compact = $("wizCompact").value.trim();
+  const resume = wizResuming();
   const body = {
     parent: wiz.mode === "child" ? wiz.parent : null, name, purpose: $("wizPurpose").value.trim(), start: true,
     model: $("wizModel").value || undefined, thinking: $("wizThinking").value || null,
     compactPercent: compact === "" ? null : Number(compact),
-    mcp: wiz.tools.mcp(), skills: wiz.tools.skills(), tools: wiz.tools.tools(), preset: $("wizRole").value || undefined,
+    mcp: wiz.tools.mcp(), skills: wiz.tools.skills(), tools: wiz.tools.tools(), preset: resume ? undefined : $("wizRole").value || undefined,
   };
   if (wizLoc() === "existing") {
     body.folder = $("wizFolder").value.trim();
-    if (wizConv()) body.sessionId = wizConv();
+    if (resume) body.resume = true; // the recipe in the folder owns the conversation: no sessionId, no preset
+    else if (wizConv()) body.sessionId = wizConv();
   }
   $("wizDone").disabled = true;
   const r = await api("/api/sessions", body).finally(() => { $("wizDone").disabled = false; });

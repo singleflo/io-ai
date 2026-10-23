@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, s
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { recipeDefaults } from "./catalog";
 import {
-  IO, PORT, bucketSessions, broadcast, clearIssue, ctx, flushScrollback, heartbeatCheck, heldLeases, hooks, isAwaiting, newSession, notifyParent, onHello, resolveIssue, restartSession, saveRecipe, sendTask, startSession, stopSession, type Session, type State,
+  IO, PORT, bucketSessions, broadcast, clearIssue, ctx, findSessionFile, flushScrollback, heartbeatCheck, heldLeases, hooks, isAwaiting, newSession, notifyParent, onHello, resolveIssue, restartSession, saveRecipe, sendTask, startSession, stopSession, type Session, type State,
 } from "./core";
 import { FolderError, folderInfo, listDirs, makeDir } from "./folder";
 import { assertPtySupported, terminateTree } from "./pty";
@@ -14,12 +14,13 @@ import { ensureToken, cookieValue, tokenMatches } from "./token";
 import { inboxCounts, inboxDecide, inboxList, onInboxChange, openStore, type InboxItem } from "./store";
 import { auditRequest, coreRoute, digestTick } from "./core-api";
 import { renameScrollback } from "./scrollback";
-import { NAME_RE, newRecipe, orchDir, peerOf, scanWorkspace, writeRecipe, type Recipe } from "./workspace";
+import { NAME_RE, newRecipe, orchDir, peerOf, readRecipe, samePath, scanWorkspace, sessionFile, writeRecipe, type Recipe } from "./workspace";
 import { checkRecipeExtras, handleHook, normalizeRecipeExtras, startAutomation } from "./automation";
 import { listPresets, loadPreset, presetFields } from "./presets";
 import { relocate } from "./relocate";
 import { listFiles, serveFile } from "./files";
 import { handleSecrets } from "./secrets";
+import { detachProjects, projectConflicts, reattachProjects } from "./archive";
 
 assertPtySupported();
 mkdirSync(orchDir(ctx.ws), { recursive: true });
@@ -106,7 +107,7 @@ function validModel(m: string | undefined): boolean {
   return !m || !models || models.includes(m.split(":")[0]);
 }
 
-type CreateBody = Partial<Recipe> & { parent?: string | null; name?: string; start?: boolean; folder?: string; preset?: string };
+type CreateBody = Partial<Recipe> & { parent?: string | null; name?: string; start?: boolean; folder?: string; preset?: string; resume?: boolean };
 
 async function createSession(b: CreateBody): Promise<Response> {
   if (!b.name || !NAME_RE.test(b.name)) return bad("invalid name (a-z, 0-9, -; 2-32 chars)");
@@ -118,11 +119,28 @@ async function createSession(b: CreateBody): Promise<Response> {
   }
   const external = typeof b.folder === "string" && b.folder.trim() ? b.folder.trim() : undefined;
   if (external && (!isAbsolute(external) || !existsSync(external) || !statSync(external).isDirectory())) return bad("folder must be an existing absolute path");
+  let resumed: Recipe | undefined;
   if (external) {
     const rel = relative(resolve(ctx.ws), resolve(external));
     if (!(rel.startsWith("..") || isAbsolute(rel))) return bad("folder inside the workspace does not need a link");
-    if (existsSync(join(external, ".orch", "session.json"))) return bad("folder is already a session");
-  }
+    const hasRecipe = existsSync(sessionFile(external));
+    if (!b.resume && hasRecipe) return bad("folder is already a session");
+    if (b.resume) {
+      if (!hasRecipe) return bad("no session to resume in that folder");
+      const owner = [...ctx.sessions.values()].find(x => samePath(x.folder, external));
+      if (owner) return bad(`folder already used by ${owner.route}`, 409);
+      if (b.sessionId || b.preset) return bad("resume cannot be combined with sessionId or preset");
+      const read = readRecipe(external);
+      if (!read.recipe) return bad(`unreadable recipe: ${read.error}`);
+      resumed = read.recipe;
+      if (resumed.sessionId && (await heldLeases([resumed.sessionId]))[resumed.sessionId]) return bad("conversation is open in another omp process", 409);
+      if (resumed.sessionId && !findSessionFile(resumed.sessionId)) {
+        // the conversation file is gone (the `conversation-missing` warning): start a new one instead of a session-lost stop
+        resumed.previousSessionIds = [...resumed.previousSessionIds, resumed.sessionId];
+        resumed.sessionId = null;
+      }
+    }
+  } else if (b.resume) return bad("resume needs a folder");
   // `sessionId`: a conversation of the linked folder ("latest" = newest); null/absent = a new conversation
   let sessionId: string | null = null;
   if (b.sessionId) {
@@ -144,23 +162,27 @@ async function createSession(b: CreateBody): Promise<Response> {
   const filled = loaded ? presetFields(loaded.preset, ctx.catalog?.mcpServers ? Object.keys(ctx.catalog.mcpServers) : null) : undefined;
   const kind = b.parent ? "child" : "root";
   const defaults = ctx.catalog ? recipeDefaults(ctx.catalog, kind) : {};
-  // precedence: catalog defaults < preset < what the body set
-  const recipe = newRecipe({
-    ...defaults,
-    ...filled?.fields,
-    ...Object.fromEntries(RECIPE_KEYS.filter(k => b[k] !== undefined).map(k => [k, b[k]])),
-    purpose: b.purpose ?? filled?.fields.purpose,
-    createdBy: b.createdBy ?? "cli",
-    desired: b.start ? "running" : "stopped",
-    sessionId,
-  });
-  if (!validModel(recipe.model)) return bad("unknown model");
+  const bodyFields = Object.fromEntries(RECIPE_KEYS.filter(k => b[k] !== undefined).map(k => [k, b[k]]));
+  // resume: the project's recipe stays; only fields present in the body overwrite it
+  // otherwise precedence: catalog defaults < preset < what the body set
+  const recipe: Recipe = resumed
+    ? { ...resumed, ...bodyFields, ...(b.purpose !== undefined ? { purpose: b.purpose } : {}), desired: b.start ? "running" : "stopped" }
+    : newRecipe({
+        ...defaults,
+        ...filled?.fields,
+        ...bodyFields,
+        purpose: b.purpose ?? filled?.fields.purpose,
+        createdBy: b.createdBy ?? "cli",
+        desired: b.start ? "running" : "stopped",
+        sessionId,
+      });
+  if (!validModel(resumed ? b.model : recipe.model)) return bad("unknown model");
   normalizeRecipeExtras(recipe);
   const folder = external ?? linkDir;
   mkdirSync(join(linkDir, ".orch"), { recursive: true }); // for links the recipe lives in the external folder
   if (external) writeFileSync(join(linkDir, ".orch", "link.json"), `${JSON.stringify({ target: resolve(external) }, null, 2)}\n`);
   writeRecipe(folder, recipe);
-  const tpl = loaded?.agents ?? templateFor(kind);
+  const tpl = resumed ? undefined : loaded?.agents ?? templateFor(kind); // a resumed folder keeps its own AGENTS.md
   if (tpl && !existsSync(join(folder, "AGENTS.md"))) writeFileSync(join(folder, "AGENTS.md"), tpl.replaceAll("{{name}}", b.name).replaceAll("{{purpose}}", recipe.purpose ?? ""));
   await reconcile();
   const s = [...ctx.sessions.values()].find(x => x.folder === folder);
@@ -241,12 +263,14 @@ async function stopSubtree(s: Session, mode: "graceful" | "kill"): Promise<Respo
 }
 
 // Archive = stop the subtree and move it under `<ws>/_archive/` (ignored by the scan). Nothing is deleted:
-// moving the folder back restores the sessions with their conversations.
+// moving the folder back restores the sessions with their conversations. A linked session's project recipe
+// (`<project>/.orch`) travels with the archive; the project is left clean (no `.orch`, no orch-owned MCP entries).
 async function archiveSubtree(s: Session, force: boolean): Promise<Response> {
   const subtree = subtreeOf(s);
   if (!force && subtree.some(x => x.state === "working" && x.proc)) return bad("busy: a session in the subtree is working", 409);
   await parkSubtree(subtree);
   for (const x of subtree) if (x.recipe) saveRecipe(x);
+  detachProjects(subtree);
   const stamp = new Date().toISOString().replace(/[-:]/g, "").replace("T", "-").slice(0, 15);
   const target = join(ctx.ws, "_archive", `${s.route.replaceAll("/", "__")}-${stamp}`);
   mkdirSync(dirname(target), { recursive: true });
@@ -279,12 +303,16 @@ async function restoreArchive(id: string): Promise<Response> {
   const target = join(ctx.ws, entry.route);
   if (existsSync(target)) return bad("route already exists", 409);
   if (!existsSync(dirname(target))) return bad("parent missing");
-  renameSync(join(ctx.ws, "_archive", id), target);
+  const archived = join(ctx.ws, "_archive", id);
+  const conflicts = projectConflicts(archived);
+  if (conflicts.length) return bad(`project folder already has a session: ${conflicts.join(", ")}`, 409);
+  renameSync(archived, target);
+  const warning = reattachProjects(target);
   await reconcile();
-  return json({ ok: true, route: entry.route });
+  return json({ ok: true, route: entry.route, ...(warning ? { warnings: [warning] } : {}) });
 }
 
-// Permanently removes an archived entry. A linked session archives only its link folder, so the project it pointed to is never touched.
+// Permanently removes an archived entry. A linked session's project recipe travels inside the archive, so the project keeps no orch files after archive and is never touched here.
 function purgeArchive(id: string): Response {
   const entry = listArchive().find(a => a.id === id);
   if (!entry) return bad("unknown archive entry", 404);

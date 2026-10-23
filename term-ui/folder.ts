@@ -2,8 +2,8 @@
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
-import { bucketSessions, ctx, heldLeases } from "./core";
-import { linkFile, sessionFile } from "./workspace";
+import { bucketSessions, ctx, findSessionFile, heldLeases } from "./core";
+import { linkFile, readRecipe, samePath, sessionFile } from "./workspace";
 
 export class FolderError extends Error {
   constructor(message: string, readonly status = 400) {
@@ -140,6 +140,59 @@ function projectMcp(folder: string, owned: Set<string>, errors: string[]): { nam
 
 export type Conversation = { id: string; title: string | null; modified: string; model: string | null; live: boolean };
 
+export type ExistingWarning = "conversation-live" | "conversation-missing" | "model-unavailable" | "desired-running" | "mcp-owned";
+
+export type ExistingSession = {
+  state: "orphan" | "managed";
+  route: string | null;
+  sessionId: string | null;
+  model: string | null;
+  thinking: string | null;
+  purpose: string | null;
+  mcp: unknown;
+  skills: unknown;
+  tools: unknown;
+  roles: unknown;
+  compactPercent: number | null;
+  // machine codes the wizard shows before resuming; only `conversation-live` blocks
+  warnings: ExistingWarning[];
+};
+
+// The recipe already stored in `folder/.orch/session.json`: "managed" when a live session uses the folder, else an "orphan" that can be resumed.
+async function existingSession(folder: string, errors: string[]): Promise<ExistingSession | null> {
+  if (!existsSync(sessionFile(folder))) return null;
+  const { recipe, error } = readRecipe(folder);
+  if (!recipe) {
+    errors.push(`session.json: ${error}`);
+    return null;
+  }
+  const owner = [...ctx.sessions.values()].find(s => samePath(s.folder, folder));
+  const warnings: ExistingWarning[] = [];
+  if (recipe.sessionId) {
+    if (!findSessionFile(recipe.sessionId)) warnings.push("conversation-missing");
+    // a managed session's own omp process holds the lease: that is not "another" process
+    if (!owner && (await heldLeases([recipe.sessionId]))[recipe.sessionId]) warnings.push("conversation-live");
+  }
+  const models = ctx.catalog?.models;
+  if (recipe.model && models && !models.includes(recipe.model.split(":")[0])) warnings.push("model-unavailable");
+  if (recipe.desired === "running") warnings.push("desired-running");
+  if (recipe.mcpOwned?.length) warnings.push("mcp-owned");
+  return {
+    state: owner ? "managed" : "orphan",
+    route: owner?.route ?? null,
+    sessionId: recipe.sessionId ?? null,
+    model: recipe.model ?? null,
+    thinking: recipe.thinking ?? null,
+    purpose: recipe.purpose ?? null,
+    mcp: recipe.mcp ?? null,
+    skills: recipe.skills ?? null,
+    tools: recipe.tools ?? null,
+    roles: recipe.roles ?? null,
+    compactPercent: recipe.compactPercent ?? null,
+    warnings,
+  };
+}
+
 export async function folderInfo(folderParam: string, route: string | null) {
   const folder = requireDir(folderParam);
   const errors: string[] = [];
@@ -156,6 +209,7 @@ export async function folderInfo(folderParam: string, route: string | null) {
   });
   const owned = new Set(route ? ctx.sessions.get(route)?.recipe?.mcpOwned ?? [] : []);
   return {
+    existing: await existingSession(folder, errors),
     folder,
     isGit: existsSync(join(folder, ".git")),
     hasAgentsMd: existsSync(join(folder, "AGENTS.md")),
