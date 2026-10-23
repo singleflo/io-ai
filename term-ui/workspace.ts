@@ -4,6 +4,9 @@ import { homedir } from "node:os";
 import { isAbsolute, join, relative, sep } from "node:path";
 
 export type Roles = { default?: string; task?: string; smol?: string; plan?: string; slow?: string };
+export type Schedule = { id: string; cron: string; text: string; enabled: boolean };
+export type Trigger = { id: string; name: string; template: string; enabled: boolean };
+export type EnvSpec = { inherit: "all" | "minimal"; secrets: string[] };
 export type Recipe = {
   version: 1;
   sessionId: string | null;
@@ -17,6 +20,10 @@ export type Recipe = {
   mcp?: string[] | "all" | "manual";
   skills?: string[] | null; // selected skill names; null = every injected skill
   tools?: string[] | null;
+  approve?: string[]; // tool-name globs that wait for the user's decision in the inbox; live (no restart)
+  schedules?: Schedule[]; // live: the scheduler reads them every tick
+  triggers?: Trigger[]; // live: `POST /hook/<id>`
+  env?: EnvSpec;
   createdBy?: string;
   createdAt?: string;
   mcpOwned?: string[]; // MCP server names orch wrote into `<folder>/.omp/mcp.json` (disabled user-level servers)
@@ -40,7 +47,8 @@ export const NAME_RE = /^[a-z][a-z0-9-]{1,31}$/;
 
 export function workspaceRoot(): string {
   const flag = process.argv.indexOf("--workspace");
-  return process.env.ORCH_HOME ?? (flag > 0 ? process.argv[flag + 1] : undefined) ?? join(homedir(), "orch");
+  const flagValue = flag > 0 && !process.argv[flag + 1]?.startsWith("--") ? process.argv[flag + 1] : undefined; // the CLI uses --workspace as a boolean
+  return process.env.ORCH_HOME ?? flagValue ?? join(homedir(), "orch");
 }
 
 export const orchDir = (ws: string) => join(ws, ".orch");

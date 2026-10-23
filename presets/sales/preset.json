@@ -1,0 +1,16 @@
+{
+  "label": "Sales",
+  "kind": "child",
+  "purpose": "Sales assistant: keep the pipeline moving, prepare quotes and follow-ups. Propose; never send anything to a customer without approval.",
+  "mcp": ["odoo-assistant", "ms365"],
+  "skills": null,
+  "tools": ["read", "grep", "glob", "find", "write", "edit", "todo", "web_search", "ask"],
+  "env": { "inherit": "minimal", "secrets": [] },
+  "approve": ["mcp__*send*", "mcp__*create*", "mcp__*write*", "mcp__*cancel*", "mcp__*run_action*", "mcp__*notify*"],
+  "schedules": [
+    {
+      "cron": "0 8 * * 1-5",
+      "text": "Morning pipeline review: list opportunities and quotes needing action today, overdue follow-ups, and propose next steps. Save the report in ./outbox/pipeline-<date>.md."
+    }
+  ]
+}

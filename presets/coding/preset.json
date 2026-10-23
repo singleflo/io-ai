@@ -1,0 +1,11 @@
+{
+  "label": "Coding",
+  "kind": "child",
+  "purpose": "Implement changes in this repository test-first, in small verified steps.",
+  "mcp": [],
+  "skills": null,
+  "tools": null,
+  "env": { "inherit": "all", "secrets": [] },
+  "approve": [],
+  "schedules": []
+}

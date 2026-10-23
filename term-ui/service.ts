@@ -4,6 +4,7 @@
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { readToken } from "./token";
 
 const LABEL = "ai.io-ai.term-ui";
 const UNIT = "io-ai-term-ui";
@@ -93,9 +94,10 @@ function fail(message: string): never {
 }
 
 async function probe(): Promise<string> {
+  const token = readToken(process.env.ORCH_HOME ?? join(homedir(), "orch"));
   try {
-    const r = await fetch(`http://127.0.0.1:${PORT}/api/global-issues`, { signal: AbortSignal.timeout(3000) });
-    return r.ok ? `answering on :${PORT}` : `HTTP ${r.status} on :${PORT}`;
+    const r = await fetch(`http://127.0.0.1:${PORT}/api/global-issues`, { headers: { authorization: `Bearer ${token ?? ""}` }, signal: AbortSignal.timeout(3000) });
+    return r.ok ? `answering on :${PORT}; login: http://127.0.0.1:${PORT}/login?t=${token}` : `HTTP ${r.status} on :${PORT}`;
   } catch {
     return `no answer on :${PORT}`;
   }

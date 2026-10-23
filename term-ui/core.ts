@@ -7,6 +7,10 @@ import type { ServerWebSocket } from "bun";
 import type { Catalog } from "./catalog";
 import { spawnPty, terminateTree, type PtyProc } from "./pty";
 import { type Found, type Kind, type Known, type Recipe, orchDir, peerOf, samePath, sessionFile, toRoute, workspaceRoot, writeRecipe } from "./workspace";
+import { awaitingRoutes, inboxAdd, inboxDecide, inboxOpenFor, logEvent, onInboxChange } from "./store";
+import { loadScrollback, saveScrollback } from "./scrollback";
+import { ensureToken } from "./token";
+import { baseEnv } from "./secrets";
 
 export type Level = "ask" | "flag" | "info";
 export type Issue = { code: string; level: Level; text: string; actions: string[] };
@@ -42,6 +46,9 @@ export type Session = Found & {
   forkedId?: string;
   pendingId?: string; // id reported by hello, persisted once omp has written the session file
   latestUnmanaged?: string;
+  mcpFailed?: Map<string, string>; // MCP servers reported failed by the extension: server -> error
+  scrollbackDirty?: boolean; // changed since the last write to `.orch/scrollback`
+  scrollbackRestored?: boolean; // loaded from disk and not yet continued by a new process
 };
 
 export const PORT = Number(process.env.PORT ?? 8787);
@@ -70,9 +77,29 @@ export function notifyParent(s: Session, text: string) {
 export function setIssue(s: Session, code: string, level: Level, text: string, actions: string[] = []) {
   const had = s.issues.get(code);
   s.issues.set(code, { code, level, text, actions });
-  if (!had && level !== "info") notifyParent(s, `${code} — ${text}`);
+  if (!had) {
+    logEvent(s.route, "issue-set", { code, level, text });
+    if (level !== "info") notifyParent(s, `${code} — ${text}`);
+    // An `ask` issue needs the user: one open inbox item per route+code (the item may survive a server restart).
+    if (level === "ask" && !inboxOpenFor(s.route, "issue").some(i => i.data.code === code)) inboxAdd(s.route, "issue", code, text, { route: s.route, code });
+  }
 }
-export const clearIssue = (s: Session, ...codes: string[]) => codes.forEach(c => s.issues.delete(c));
+export function clearIssue(s: Session, ...codes: string[]) {
+  for (const code of codes) {
+    if (!s.issues.delete(code)) continue;
+    logEvent(s.route, "issue-clear", { code });
+    for (const item of inboxOpenFor(s.route, "issue")) if (item.data.code === code) inboxDecide(item.id, "dismissed");
+    if (code === "mcp-failed") {
+      s.mcpFailed = undefined;
+      for (const item of inboxOpenFor(s.route, "mcp")) inboxDecide(item.id, "dismissed");
+    }
+  }
+}
+
+// Routes with an open approval or `orch_ask_user` question; refreshed whenever the inbox changes.
+let awaiting = awaitingRoutes();
+onInboxChange(() => void (awaiting = awaitingRoutes()));
+export const isAwaiting = (route: string) => awaiting.has(route);
 export const isBlocked = (s: Session) => [...s.issues.keys()].some(c => BLOCKING.has(c));
 
 // ---------- session files ----------
@@ -117,7 +144,7 @@ export function headerCwd(file: string): string | undefined {
 }
 
 // The omp SDK needs a newer Bun (Bun.JSONL) than the one running the server; the helper uses the pinned local one.
-const SDK_BUN = existsSync(join(import.meta.dir, "node_modules", ".bin", "bun")) ? join(import.meta.dir, "node_modules", ".bin", "bun") : process.execPath;
+export const SDK_BUN = existsSync(join(import.meta.dir, "node_modules", ".bin", "bun")) ? join(import.meta.dir, "node_modules", ".bin", "bun") : process.execPath;
 
 async function sdk(args: string[]): Promise<{ code: number; json: Record<string, unknown> }> {
   const p = Bun.spawn([SDK_BUN, join(import.meta.dir, "omp-sdk.ts"), ...args], { stdout: "pipe", stderr: "pipe" });
@@ -184,13 +211,13 @@ export function fingerprint(s: Session): Parts {
 }
 export const recipePart = (s: Session) => {
   const r = s.recipe!;
-  return sha(JSON.stringify({ kind: s.kind, model: r.model, thinking: r.thinking, roles: r.roles, compactPercent: r.compactPercent, mcp: r.mcp, skills: r.skills, tools: r.tools }));
+  return sha(JSON.stringify({ kind: s.kind, model: r.model, thinking: r.thinking, roles: r.roles, compactPercent: r.compactPercent, mcp: r.mcp, skills: r.skills, tools: r.tools, env: r.env }));
 };
 
 // Recipe fields whose change needs a restart, one JSON string each (`restart-needed` names the fields that differ).
 export function trackedFields(r: Recipe, kind: Kind): Record<string, string> {
   const roles = r.roles && Object.keys(r.roles).length ? r.roles : null;
-  const fields = { model: r.model, thinking: r.thinking, roles, compactPercent: r.compactPercent, mcp: r.mcp, skills: r.skills, tools: r.tools, kind };
+  const fields = { model: r.model, thinking: r.thinking, roles, compactPercent: r.compactPercent, mcp: r.mcp, skills: r.skills, tools: r.tools, env: r.env, kind };
   return Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, JSON.stringify(v ?? null)]));
 }
 
@@ -212,7 +239,7 @@ function readMcpFile(file: string): McpFile | null | undefined {
 }
 
 // Removes the servers orch owns from a folder's `.omp/mcp.json`; deletes the file when nothing else is left in it.
-function removeOwnedMcp(folder: string, owned: string[]) {
+export function removeOwnedMcp(folder: string, owned: string[]) {
   const file = mcpFileOf(folder);
   const cur = readMcpFile(file);
   if (!cur?.mcpServers) return;
@@ -314,6 +341,7 @@ function writeOverlay(s: Session): string {
 // ---------- terminal plumbing ----------
 export function broadcast(s: Session, data: string) {
   s.scrollback += data;
+  s.scrollbackDirty = true;
   if (s.scrollback.length > SCROLLBACK_MAX) {
     // Cut at a line boundary: slicing mid-sequence garbles the repaint on reattach.
     const from = s.scrollback.length - SCROLLBACK_MAX;
@@ -323,6 +351,15 @@ export function broadcast(s: Session, data: string) {
   for (const ws of s.clients) ws.send(data);
 }
 
+// Writes the scrollback to `.orch/scrollback` when it changed since the last write.
+export function flushScrollback(s: Session) {
+  if (!s.scrollbackDirty) return;
+  s.scrollbackDirty = false;
+  try {
+    saveScrollback(ctx.ws, s.route, s.scrollback);
+  } catch {}
+}
+
 export function sendTask(s: Session, text: string) {
   if (!s.proc) throw new Error("session not running");
   s.proc.write(`\x1b[200~${text}\x1b[201~`); // bracketed paste: multi-line text stays one prompt
@@ -330,13 +367,21 @@ export function sendTask(s: Session, text: string) {
 }
 
 function childEnv(s: Session): Record<string, string> {
-  const env: Record<string, string> = { ...(process.env as Record<string, string>) };
+  const { env, missing } = baseEnv(s.recipe?.env, process.env);
+  if (missing.length) setIssue(s, "secret-missing", "flag", missing.join(", "), []);
+  else clearIssue(s, "secret-missing");
   delete env.OMPCODE; // otherwise the child omp believes it is nested inside another omp
   env.TERM = "xterm-256color";
   env.COLORTERM = "truecolor";
   env.ORCH_URL = `http://127.0.0.1:${PORT}`;
   env.ORCH_ROUTE = s.route;
   env.ORCH_PEER = peerOf(s.route);
+  env.ORCH_TOKEN = ensureToken(ctx.ws);
+  env.ORCH_KIND = s.kind;
+  const allowed = s.recipe?.tools;
+  const builtin = ctx.catalog?.builtinTools;
+  if (allowed && builtin) env.ORCH_TOOLS_DENY = builtin.filter(n => !allowed.includes(n)).join(",");
+  else delete env.ORCH_TOOLS_DENY;
   return env;
 }
 
@@ -347,6 +392,12 @@ export async function startSession(s: Session): Promise<boolean> {
   s.starting = true;
   try {
     clearIssue(s, "open-elsewhere", "session-lost", "relocation-failed", "relocation-blocked");
+    // Not blocking: reconcile retries on its own and the issue clears once the catalog has the built-in list.
+    if (r.tools && !ctx.catalog?.builtinTools.length) {
+      setIssue(s, "tools-unavailable", "flag", "the built-in tool list is not available, so the tools allowlist cannot be enforced; refresh the catalog", []);
+      return false;
+    }
+    clearIssue(s, "tools-unavailable");
     gitExclude(s, [".orch/"]);
     const mismatch = ctx.globalIssues.has("sdk-mismatch");
     let file: string | undefined;
@@ -386,12 +437,14 @@ export async function startSession(s: Session): Promise<boolean> {
     if (r.model) args.push("--model", r.model);
     if (r.thinking) args.push("--thinking", r.thinking);
     args.push("--config", overlay, "--append-system-prompt", join(IO, "protocols", s.kind === "root" ? "ROOT-PROTOCOL.md" : "PEER-PROTOCOL.md"));
-    if (r.tools) args.push("--tools", r.tools.join(","));
     args.push("-e", join(IO, "term-ui", "orch-ext.ts"));
 
     const parts = fingerprint(s);
-    s.scrollback = "";
-    for (const ws of s.clients) ws.send("\x1bc"); // full reset: the new process repaints from scratch
+    if (s.scrollbackRestored) s.scrollbackRestored = false; // first start after a server restart continues the saved history
+    else {
+      s.scrollback = "";
+      for (const ws of s.clients) ws.send("\x1bc"); // full reset: the new process repaints from scratch
+    }
     broadcast(s, `\r\n\x1b[2m[term-ui] ${args.join(" ")}\x1b[0m\r\n`);
     const proc = spawnPty(args, { cwd: s.folder, env: childEnv(s), cols: 120, rows: 32, onData: d => broadcast(s, d) });
     Object.assign(s, {
@@ -412,7 +465,8 @@ export async function startSession(s: Session): Promise<boolean> {
       obs: undefined,
       fallback: false,
     });
-    clearIssue(s, "restart-needed", "role-changed", "hello-missing");
+    clearIssue(s, "restart-needed", "role-changed", "hello-missing"); // `mcp-failed` stays until the server connects again or the user dismisses it
+    logEvent(s.route, "spawn", { pid: proc.pid, sessionId: r.sessionId });
     proc.exited.then(({ code, signal }) => {
       if (s.proc !== proc) return;
       s.proc = undefined;
@@ -421,6 +475,9 @@ export async function startSession(s: Session): Promise<boolean> {
       s.hung = false;
       s.obs = undefined;
       s.exit = signal ?? `exit ${code}`;
+      logEvent(s.route, "exit", { exit: s.exit });
+      for (const kind of ["approval", "question"] as const) for (const item of inboxOpenFor(s.route, kind)) if (!item.data.child) inboxDecide(item.id, "dismissed"); // the waiting tool died with the process
+      flushScrollback(s);
       if (s.restarting) {
         s.restarting = false;
         void startSession(s);
@@ -466,6 +523,7 @@ export function stopSession(s: Session) {
   s.recipe.desired = "stopped";
   saveRecipe(s);
   s.crashed = false;
+  logEvent(s.route, "stop", {});
   if (s.proc) void terminateTree(s.proc.pid);
 }
 
@@ -690,4 +748,11 @@ export async function resolveIssue(s: Session, code: string, action: string): Pr
   return undefined;
 }
 
-export const newSession = (f: Found): Session => ({ ...f, state: "stopped", scrollback: "", clients: new Set(), notices: [], issues: new Map() });
+export function newSession(f: Found): Session {
+  let scrollback = loadScrollback(ctx.ws, f.route);
+  if (scrollback.length > SCROLLBACK_MAX) {
+    const nl = scrollback.indexOf("\n", scrollback.length - SCROLLBACK_MAX);
+    scrollback = nl >= 0 ? scrollback.slice(nl + 1) : scrollback.slice(-SCROLLBACK_MAX);
+  }
+  return { ...f, state: "stopped", scrollback, scrollbackRestored: scrollback.length > 0, clients: new Set(), notices: [], issues: new Map() };
+}

@@ -7,6 +7,10 @@ You are a **root** session managed by term-ui. You create and manage child sessi
 - Before choosing models, run `orch usage` and `orch models`. If the weekly Anthropic quota is above 90%, use `zai/glm-5.3:high` as model and `zai/glm-5.3-flash:low` for task/smol.
 - Send work to a child as `REQ-NNN` via `peer_request`/`peer_send` to its peer name from `orch list` (not its route). Children answer in the 4-line format of PEER-PROTOCOL.
 - Change a child's model or MCP only with `orch restart`, and only when its state is `idle`.
+- To ask the user anything, call `orch_ask_user` (question, optional `options`); NEVER wait for an answer in prose. The answer comes back as the tool result.
+- Tool calls that match the `approve` patterns of your recipe wait for the user's decision in the term-ui inbox. A rejected call MUST NOT be retried; report it to the user.
+- Messages starting with `[orch schedule]` or `[orch trigger]` come from automations the user configured: treat them as the user's request.
+- A message `[orch] user answer for <child> REQ-NNN: <answer>` is the user's answer to that child's `Questions:` line: send it to the child as a follow-up of the same REQ-NNN.
 - One child per folder that writes.
 - To create a specialist session (long-lived domain agent), use the skill `create-specialist-session`.
 - Talk to the user in the user's language; everything another agent reads is in English (see "Writing instructions").

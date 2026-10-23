@@ -195,7 +195,7 @@
   .global-issues { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 19; width: min(560px, calc(100vw - 24px)); }
   .global-issues[hidden] { display: none; }
   #conn:not([hidden]) + .global-issues { top: 58px; }
-  dialog { width: min(480px, calc(100vw - 32px)); padding: 20px; color: var(--fg); background: var(--s1); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: 0 16px 48px rgba(0,0,0,.5); }
+  dialog { width: min(480px, calc(100vw - 32px)); padding: 20px; color: var(--fg); background: var(--s1); border: 1px solid var(--line-strong); border-radius: var(--radius); }
   dialog::backdrop { background: rgba(5,7,10,.6); }
   dialog h3 { margin: 0 0 14px; font-size: 15px; font-weight: 600; }
   dialog form { display: flex; flex-direction: column; gap: 10px; }
@@ -220,7 +220,7 @@
   .wiz-hint { margin: 0 0 12px; font-size: 12px; color: var(--muted); line-height: 1.5; }
   .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
   .checks.one { grid-template-columns: 1fr; }
-  .check { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px; row-gap: 2px; align-items: center; padding: 8px 10px; border: 1px solid transparent; border-radius: var(--radius-sm); cursor: pointer; transition: background .15s, border-color .15s; }
+  .check { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px; row-gap: 2px; align-items: center; align-content: center; padding: 8px 10px; border: 1px solid transparent; border-radius: var(--radius-sm); cursor: pointer; transition: background .15s, border-color .15s; }
   .check:hover { background: var(--s2); }
   .check:has(input:checked) { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: color-mix(in srgb, var(--accent) 7%, transparent); }
   .check input { appearance: none; width: 16px; height: 16px; margin: 0; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--s2); cursor: pointer; display: grid; place-content: center; transition: background .15s, border-color .15s; }
@@ -271,12 +271,219 @@
   details.adv[open] summary { margin-bottom: 10px; }
   .wiz-info { display: flex; flex-direction: column; gap: 10px; }
   #wizTools, #editTools { margin-top: 20px; }
+  #editExtra { margin-top: 20px; }
+  .mono-in { font-family: var(--mono); font-size: 12px; }
+  textarea.mono-in { line-height: 1.5; }
+  input[readonly] { color: var(--fg-2); background: var(--s1); }
+  .sel-sub { display: flex; align-items: center; gap: 8px; margin: 14px 0 6px; }
+  .sel-sub .sel-title { flex: 1; }
+  .live-note { font-size: 11px; color: var(--muted); }
+  .rows { display: flex; flex-direction: column; gap: 8px; }
+  .auto-row { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--s2); }
+  .auto-row[data-off] { opacity: .65; }
+  .auto-row textarea { min-height: 56px; background: var(--s1); }
+  .auto-row input, .auto-row textarea { background: var(--s1); }
+  .auto-line { display: flex; align-items: center; gap: 8px; }
+  .auto-line input[type="text"], .auto-line input:not([type]) { flex: 1; min-width: 0; }
+  .auto-next { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .auto-next[data-h="bad"] { color: var(--bad); }
+  .auto-empty { font-size: 12px; color: var(--muted); }
+  .sw { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-2); cursor: pointer; white-space: nowrap; }
+  .sw input { appearance: none; width: 28px; height: 16px; margin: 0; padding: 0; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--s3); position: relative; cursor: pointer; transition: background .15s, border-color .15s; }
+  .sw input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); transition: transform .15s var(--ease), background .15s; }
+  .sw input:checked { background: var(--accent); border-color: var(--accent); }
+  .sw input:checked::after { transform: translateX(12px); background: var(--accent-ink); }
+  .sw input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .fileset + .fileset { margin-top: 18px; }
+  .listrow { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 6px; color: var(--fg-2); text-decoration: none; }
+  a.listrow:hover { background: var(--s3); color: var(--fg); }
+  .listrow .nm { flex: 1; min-width: 0; font: 12px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .listrow .meta { flex: none; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .dlg-list { display: flex; flex-direction: column; max-height: 42vh; overflow-y: auto; margin: 0 -8px; }
+  #filesBody .dlg-list { max-height: none; overflow: visible; }
+  .checks > .auto-empty { grid-column: 1 / -1; }
+  #secretsForm { margin-top: 14px; }
+  #secretsList .listrow { padding: 2px 8px; }
+  #secretsList .picker-row { padding: 4px 0; font: 12px var(--mono); }
+  .pick-hidden { margin-left: auto; padding-right: 4px; }
+  .pick-new { display: flex; gap: 8px; padding: 6px; border-top: 1px solid var(--line); }
+  .pick-new input { flex: 1; font-family: var(--mono); font-size: 12px; }
+  #pickDlg .picker { margin-bottom: 4px; }
+  #pickDlg .picker-list { max-height: 36vh; }
+  .role-sum { margin-top: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--s2); display: flex; flex-direction: column; gap: 8px; }
+  .role-sum h4 { margin: 0; font-size: 13px; font-weight: 600; }
+  .role-sum dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 12px; }
+  .role-sum dt { color: var(--muted); }
+  .role-sum dd { margin: 0; min-width: 0; color: var(--fg-2); }
+  .role-sum dd ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
+  .role-sum code { font: 12px var(--mono); color: var(--fg); }
+  /* sidebar: bell, view switch, search */
+  .brand .bell { position: relative; margin-left: auto; }
+  .bell .badge { position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--h, var(--accent)); color: var(--accent-ink); font: 600 10px/16px var(--mono); text-align: center; font-variant-numeric: tabular-nums; }
+  .bell[data-h="warn"] { color: var(--warn); }
+  .seg { display: flex; gap: 2px; padding: 2px; background: var(--s2); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+  .seg button { all: unset; flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; height: 26px; padding: 0 6px; border-radius: 6px; cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 500; white-space: nowrap; transition: background .15s, color .15s; }
+  .seg button:hover { color: var(--fg); }
+  .seg button[aria-selected="true"] { background: var(--s3); color: var(--fg); }
+  .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  aside .seg { margin: 0 8px 10px; }
+  .search { position: relative; margin: 0 8px 14px; }
+  .search svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+  .search input { padding-left: 30px; }
+  .states { display: inline-flex; align-items: center; gap: 6px; }
+  .root .count[data-h="warn"] { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+
+  /* board and activity views replace the session columns */
+  #alt { flex: 1; min-width: 0; display: flex; flex-direction: column; background: color-mix(in srgb, var(--accent) 3.5%, var(--bg)); }
+  body[data-view="sessions"] #alt { display: none; }
+  body:not([data-view="sessions"]) :is(#center, #split, #kidcol) { display: none; }
+  .alt-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .alt-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .alt-head h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+  .alt-head select { width: auto; min-width: 180px; }
+  #board { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 16px; }
+  .col { display: flex; flex-direction: column; min-height: 0; background: var(--s1); border: 1px solid var(--line); border-radius: var(--radius); }
+  .col-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 600; }
+  .col-head .dot { background: var(--h); }
+  .col-list { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+  .req { all: unset; box-sizing: border-box; flex: none; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--s2); border: 1px solid color-mix(in srgb, var(--h, var(--off)) 28%, var(--line)); border-radius: var(--radius-sm); cursor: pointer; transition: background .15s, border-color .15s; }
+  .req:hover { background: var(--s3); border-color: color-mix(in srgb, var(--h, var(--off)) 50%, var(--line)); }
+  .req:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .req-top { display: flex; align-items: center; gap: 8px; }
+  .req-key { font: 600 12px var(--mono); color: var(--fg-2); }
+  .req-title { font-size: 13px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .req-meta { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .req-meta .mono:first-child { min-width: 0; }
+  #activity { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 16px 16px; }
+  .act { display: grid; grid-template-columns: 112px minmax(120px, 200px) 112px minmax(0, 1fr); gap: 12px; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--line); font-size: 12px; }
+  .act .pill { justify-self: start; }
+  .act .route { all: unset; font: 12px var(--mono); color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .act .route:hover { color: var(--fg); text-decoration: underline; }
+  .act .route:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* inbox drawer */
+  #inboxPanel { position: fixed; top: 0; right: 0; bottom: 0; z-index: 18; width: min(440px, 100vw); display: flex; flex-direction: column; background: var(--s1); border-left: 1px solid var(--line-strong); transform: translateX(100%); visibility: hidden; transition: transform .25s var(--ease), visibility 0s .25s; }
+  #inboxPanel.open { transform: none; visibility: visible; transition: transform .25s var(--ease); }
+  .inb-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .inb-head h2 { margin: 0; font-size: 14px; font-weight: 600; }
+  .inb-head .seg { width: 150px; }
+  .inb-sub { display: flex; align-items: center; gap: 8px; padding: 10px 14px 0; font-size: 12px; color: var(--muted); }
+  .inb-sub:not(:has(> :not([hidden]))) { display: none; }
+  #inboxList { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .inb { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--s2); border: 1px solid color-mix(in srgb, var(--h, var(--off)) 35%, var(--line)); border-radius: var(--radius); }
+  .inb[data-st="closed"] { background: var(--s1); }
+  .inb[aria-busy="true"] { opacity: .6; pointer-events: none; }
+  .inb-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .inb-route { all: unset; min-width: 0; font: 12px var(--mono); color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  button.inb-route:hover { color: var(--fg); text-decoration: underline; }
+  .inb-route:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .inb-title { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+  .inb-body { font-size: 13px; color: var(--fg-2); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 12em; overflow-y: auto; }
+  .inb-body:empty { display: none; }
+  .inb-tool { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .inb-tool .mono { color: var(--fg); }
+  .inb textarea { min-height: 72px; }
+  .inb textarea, .inb input { background: var(--s1); }
+  .inb .btn:not(.primary, .danger, .ghost, :disabled) { background: var(--s3); }
+  textarea.mono { font-family: var(--mono); font-size: 12px; white-space: pre; overflow: auto; color: var(--fg); }
+  .inb-ctl { display: flex; flex-direction: column; gap: 8px; }
+  .inb-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .inb-reject { display: flex; gap: 8px; }
+  .inb-reject input { flex: 1; min-width: 0; }
+  .hit { all: unset; box-sizing: border-box; width: 100%; display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; }
+  .hit:hover { background: var(--s2); }
+  .hit:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .hit-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .hit-text { font-size: 13px; color: var(--fg-2); overflow-wrap: anywhere; }
+  .hits-group + .hits-group { margin-top: 14px; }
+  .hits-group h4 { margin: 0 0 4px 10px; font-size: 12px; font-weight: 500; color: var(--muted); }
+
+  /* phone chrome: absent above 760px */
+  #rootSel, #moreBtn { display: none; }
+  .aside-more { display: contents; }
+
+  /* phone: the sidebar is a top bar, the columns stack, dialogs and the inbox go full-screen */
+  @media (max-width: 760px) {
+    html, body { height: 100dvh; }
+    body { flex-direction: column; }
+    .btn, .btn.sm, .issue .btn, .orphan .btn { height: 40px; }
+    .btn.icon { width: 40px; }
+    select, input, textarea { font-size: 16px; }
+    select, input { height: 40px; }
+    .sw { min-height: 40px; }
+
+    aside { width: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--line); position: relative; z-index: 17; }
+    .brand { display: contents; }
+    .brand-name, aside > .section-title, #roots { display: none; }
+    .brand .bell { order: 5; margin-left: 0; }
+    #rootSel { display: block; order: 2; flex: 1 1 0; min-width: 0; width: auto; }
+    details.new { order: 3; margin: 0; }
+    details.new summary { width: 40px; height: 40px; padding: 0; justify-content: center; background: var(--s2); border: 1px solid var(--line); }
+    details.new summary span { display: none; }
+    #moreBtn { display: inline-flex; order: 4; }
+    #views { order: 6; margin: 0; flex: 1 1 200px; }
+    .seg button { height: 36px; }
+    .search { order: 7; margin: 0; flex: 1 1 120px; }
+    .aside-more { display: none; position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; max-height: 60dvh; overflow-y: auto; background: var(--s1); border-bottom: 1px solid var(--line-strong); box-shadow: 0 12px 24px rgba(0,0,0,.45); }
+    aside.more .aside-more { display: flex; }
+    .connstate { margin-top: 0; padding: 12px; }
+    #orphans, #archived { max-height: none; }
+
+    #center { flex: 3 1 0; min-width: 0; min-height: 0; padding: 8px 10px 10px; gap: 8px; }
+    #split { display: none; }
+    #kidcol { width: auto !important; min-width: 0; flex: 2 1 0; min-height: 0; border-top: 1px solid var(--line); }
+    #kidhead { height: 48px; padding: 0 12px; }
+    #kidlist { padding: 10px; }
+    .lead-head > .spacer { display: none; }
+    .tools { width: 100%; gap: 6px; }
+    .tools .group, .card .bar .group { display: flex; width: 100%; }
+    .tools .group select, .card .bar .group select { flex: 1; min-width: 0; width: auto; }
+    .tools .sep, .card .bar .sep { display: none; }
+    .tools .tools-end { margin-left: 0; }
+    .termwrap { padding: 6px 4px 4px 8px; }
+    .card .termwrap { height: 32dvh; }
+    .card .bar { padding: 0 12px 10px; }
+
+    #alt { min-height: 0; }
+    .alt-head { flex-wrap: wrap; padding: 10px 12px; }
+    .alt-head select { flex: 1 1 140px; min-width: 0; }
+    #board { display: flex; flex-direction: column; overflow-y: auto; padding: 12px; }
+    .col { flex: none; }
+    .col-list { overflow: visible; }
+    .dlg-list { margin: 0; }
+    #activity { padding: 4px 12px 16px; }
+    .act { grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; }
+
+    dialog { width: 100%; max-width: none; margin: 0; padding: 14px; border: 0; border-radius: 0; }
+    dialog[open] { height: 100dvh; max-height: 100dvh; }
+    .wiz-grid, .wiz-grid.three, .checks { grid-template-columns: minmax(0, 1fr); }
+    .wiz-foot { flex-wrap: wrap; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+    .wiz-foot .formerr { flex: 1 0 100%; }
+    .auto-line { flex-wrap: wrap; }
+    .auto-line input[type="text"], .auto-line input:not([type]) { flex: 1 1 140px; }
+    .path-row input { min-width: 0; }
+    #pickDlg .picker { flex: 1; min-height: 0; }
+    #pickDlg .picker-list { flex: 1; max-height: none; }
+    .crumbs button { padding: 10px 6px; }
+    .picker-row, .listrow { padding: 10px 8px; }
+    #conn { top: auto; bottom: 12px; }
+    .global-issues, #conn:not([hidden]) + .global-issues { top: auto; bottom: 12px; max-height: 40dvh; overflow-y: auto; }
+    #conn:not([hidden]) + .global-issues { bottom: 58px; }
+
+    #inboxPanel { width: 100%; border-left: 0; }
+    .inb-head { padding: 8px 12px; }
+    #inboxList { padding: 10px; }
+    button.inb-route { display: flex; align-items: center; min-height: 40px; }
+    .inb .btn { height: 44px; }
+    .inb-actions .btn { flex: 1 1 auto; justify-content: center; }
+    .inb textarea { max-height: 30dvh; }
+  }
   @media (prefers-reduced-motion: reduce) {
     *, *::after { animation: none !important; transition: none !important; }
   }
 </style>
 </head>
-<body>
+<body data-view="sessions">
 <dialog id="wizDlg">
   <header class="wiz-head">
     <h3 id="wizTitle"></h3>
@@ -289,6 +496,11 @@
         <div class="wiz-field wiz-wide">
           <label for="wizName" data-i18n="roots.namePh"></label>
           <input id="wizName" required pattern="[a-z][a-z0-9\-]{1,31}" data-i18n-title="form.nameRule">
+        </div>
+        <div class="wiz-field wiz-wide" id="wizRoleField" hidden>
+          <label for="wizRole" data-i18n="wiz.role"></label>
+          <select id="wizRole"></select>
+          <p class="wiz-hint" data-i18n="wiz.roleHint"></p>
         </div>
         <div class="wiz-field wiz-wide">
           <label for="wizPurpose" data-i18n="wiz.mission"></label>
@@ -306,18 +518,6 @@
           <div class="path-row">
             <input id="wizFolder" data-i18n-ph="wiz.folderPh" autocomplete="off" spellcheck="false">
             <button class="btn" type="button" id="wizBrowse"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg><span data-i18n="wiz.browse"></span></button>
-          </div>
-          <div class="picker" id="wizPicker" hidden>
-            <div class="picker-bar">
-              <button class="btn icon ghost" type="button" id="pickUp" data-i18n-title="wiz.pickerUp" data-i18n-aria="wiz.pickerUp"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></button>
-              <nav class="crumbs" id="pickCrumbs" data-i18n-aria="wiz.pickerPath"></nav>
-            </div>
-            <div class="picker-list" id="pickList"></div>
-            <div class="picker-foot">
-              <span class="formerr" id="pickErr" hidden></span>
-              <span class="spacer"></span>
-              <button class="btn primary sm" type="button" id="pickUse" data-i18n="wiz.pickerUse"></button>
-            </div>
           </div>
           <p class="wiz-hint" data-i18n="wiz.folderHint"></p>
           <div class="wiz-info" id="wizInfo" hidden>
@@ -344,6 +544,7 @@
           <label for="wizCompact" data-i18n="form.compact"></label><input id="wizCompact" type="number" min="1" max="100" step="1" data-i18n-ph="form.compactPh">
         </div>
       </div>
+      <div class="role-sum" id="wizRoleSum" hidden></div>
       <div id="wizTools"></div>
     </section>
     </div>
@@ -391,6 +592,50 @@
           </div>
         </details>
       </div>
+      <div id="editExtra">
+        <section class="sel">
+          <h4 data-i18n="edit.folderTitle"></h4>
+          <p class="wiz-hint" data-i18n="edit.folderHint"></p>
+          <div class="path-row">
+            <input id="editFolder" class="mono-in" readonly spellcheck="false" data-i18n-aria="edit.folderTitle">
+            <button class="btn" type="button" id="editFolderChange"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg><span data-i18n="edit.folderChange"></span></button>
+            <button class="btn" type="button" id="editFolderIn" hidden data-i18n="edit.folderIntoWs"></button>
+          </div>
+          <fieldset class="sel-group">
+            <legend data-i18n="edit.convTitle"></legend>
+            <div class="checks one" id="editConvs"></div>
+          </fieldset>
+          <div class="formerr" id="editFolderErr" hidden></div>
+          <p class="wiz-hint" id="editFolderOk" hidden></p>
+        </section>
+        <section class="sel">
+          <h4 data-i18n="edit.approveTitle"></h4>
+          <p class="wiz-hint" data-i18n="edit.approveHint"></p>
+          <textarea id="editApprove" class="mono-in" rows="3" spellcheck="false" data-i18n-ph="edit.approvePh" data-i18n-aria="edit.approveTitle"></textarea>
+          <span class="live-note" data-i18n="edit.liveHint"></span>
+        </section>
+        <section class="sel">
+          <h4 data-i18n="edit.autoTitle"></h4>
+          <p class="wiz-hint" data-i18n="edit.autoHint"></p>
+          <div class="sel-sub"><span class="sel-title" data-i18n="auto.schedules"></span><button class="btn sm" type="button" id="editAddSched"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg><span data-i18n="auto.addSchedule"></span></button></div>
+          <div class="rows" id="editScheds"></div>
+          <div class="sel-sub"><span class="sel-title" data-i18n="auto.triggers"></span><button class="btn sm" type="button" id="editAddTrig"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg><span data-i18n="auto.addTrigger"></span></button></div>
+          <div class="rows" id="editTrigs"></div>
+          <span class="live-note" data-i18n="edit.liveHint"></span>
+        </section>
+        <section class="sel">
+          <h4 data-i18n="edit.envTitle"></h4>
+          <p class="wiz-hint" data-i18n="edit.envHint"></p>
+          <fieldset class="sel-group">
+            <legend data-i18n="edit.envInherit"></legend>
+            <div class="checks one" id="editInherit"></div>
+          </fieldset>
+          <fieldset class="sel-group">
+            <legend data-i18n="edit.envSecrets"></legend>
+            <div class="checks" id="editSecrets"></div>
+          </fieldset>
+        </section>
+      </div>
       <div id="editTools"></div>
     </div>
     <p class="wiz-hint" id="editHint" data-i18n="edit.restartHint" hidden></p>
@@ -403,13 +648,77 @@
     </footer>
   </form>
 </dialog>
+<dialog id="pickDlg">
+  <h3 id="pickTitle"></h3>
+  <div class="picker">
+    <div class="picker-bar">
+      <button class="btn icon ghost" type="button" id="pickUp" data-i18n-title="wiz.pickerUp" data-i18n-aria="wiz.pickerUp"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></button>
+      <nav class="crumbs" id="pickCrumbs" data-i18n-aria="wiz.pickerPath"></nav>
+      <label class="sw pick-hidden"><input type="checkbox" id="pickHidden"><span data-i18n="pick.hidden"></span></label>
+    </div>
+    <div class="picker-list" id="pickList"></div>
+    <div class="pick-new">
+      <input id="pickNewName" autocomplete="off" spellcheck="false" data-i18n-ph="pick.newPh" data-i18n-aria="pick.newFolder">
+      <button class="btn" type="button" id="pickCreate"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg><span data-i18n="pick.create"></span></button>
+    </div>
+  </div>
+  <footer class="wiz-foot">
+    <span class="formerr" id="pickErr" hidden></span>
+    <span class="spacer"></span>
+    <button class="btn ghost" type="button" id="pickCancel" data-i18n="edit.cancel"></button>
+    <button class="btn primary" type="button" id="pickUse" data-i18n="wiz.pickerUse"></button>
+  </footer>
+</dialog>
+<dialog id="filesDlg">
+  <h3><span data-i18n="files.title"></span> · <span class="mono" id="filesTitle"></span></h3>
+  <p class="wiz-hint" data-i18n="files.hint"></p>
+  <div class="wiz-body" id="filesBody"></div>
+  <footer class="wiz-foot">
+    <span class="spacer"></span>
+    <button class="btn" type="button" id="filesClose" data-i18n="dlg.close"></button>
+  </footer>
+</dialog>
+<dialog id="secretsDlg">
+  <h3 data-i18n="secrets.title"></h3>
+  <p class="wiz-hint" data-i18n="secrets.hint"></p>
+  <div class="wiz-body">
+    <div class="dlg-list" id="secretsList"></div>
+    <form id="secretsForm" autocomplete="off" class="wiz-grid">
+      <div class="wiz-field">
+        <label for="secretName" data-i18n="secrets.name"></label>
+        <input id="secretName" class="mono-in" required pattern="[A-Z_][A-Z0-9_]*" spellcheck="false" data-i18n-ph="secrets.namePh" data-i18n-title="secrets.badName">
+      </div>
+      <div class="wiz-field">
+        <label for="secretValue" data-i18n="secrets.value"></label>
+        <input id="secretValue" type="password" required autocomplete="new-password">
+      </div>
+    </form>
+    <p class="wiz-hint" data-i18n="secrets.replaceHint"></p>
+  </div>
+  <footer class="wiz-foot">
+    <span class="formerr" id="secretsErr" hidden></span>
+    <span class="spacer"></span>
+    <button class="btn ghost" type="button" id="secretsClose" data-i18n="dlg.close"></button>
+    <button class="btn primary" type="button" id="secretsSave" data-i18n="secrets.save"></button>
+  </footer>
+</dialog>
 <aside>
-  <div class="brand"><svg class="i" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>term-ui</div>
+  <div class="brand"><svg class="i" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg><span class="brand-name">term-ui</span>
+    <button class="btn icon ghost bell" id="bell" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><span class="badge" id="bellBadge" hidden></span></button></div>
+  <select id="rootSel" data-i18n-aria="aria.roots"></select>
+  <button class="btn icon ghost" id="moreBtn" type="button" aria-expanded="false" data-i18n-title="nav.more" data-i18n-aria="nav.more"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
+  <div class="seg" id="views" role="tablist" data-i18n-aria="view.label">
+    <button type="button" role="tab" data-v="sessions" data-i18n="view.sessions"></button>
+    <button type="button" role="tab" data-v="board" data-i18n="view.board"></button>
+    <button type="button" role="tab" data-v="activity" data-i18n="view.activity"></button>
+  </div>
+  <div class="search"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input id="search" type="search" data-i18n-ph="search.ph" data-i18n-aria="search.aria" autocomplete="off" spellcheck="false"></div>
   <div class="section-title" data-i18n="roots.title"></div>
   <nav id="roots" data-i18n-aria="aria.roots"></nav>
   <details class="new" id="newRoot">
-    <summary><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg><span data-i18n="roots.new"></span></summary>
+    <summary data-i18n-aria="roots.new"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg><span data-i18n="roots.new"></span></summary>
   </details>
+  <div class="aside-more">
   <section id="orphans" hidden>
     <div class="section-title" data-i18n="orphans.title"></div>
     <div id="orphanlist"></div>
@@ -419,7 +728,9 @@
     <div id="archivedlist"></div>
   </section>
   <div class="connstate"><span class="dot" id="conndot" data-h="ok"></span><span id="conntext"></span><span class="spacer"></span>
+  <button class="btn icon ghost" id="secretsBtn" type="button" data-i18n-title="secrets.open" data-i18n-aria="secrets.open"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5"/></svg></button>
     <select id="lang" data-i18n-aria="lang.label"><option value="en">EN</option><option value="it">IT</option></select></div>
+  </div>
 </aside>
 
 <div id="conn" role="status" hidden><svg class="i" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></svg><span data-i18n="conn.banner"></span></div>
@@ -429,7 +740,7 @@
   <header class="lead-head">
     <div class="lead-id">
       <div class="lead-name"><span class="chip-lead"><svg class="i" viewBox="0 0 24 24"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.020 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"/><path d="M5 21h14"/></svg><span data-i18n="lead.chip"></span></span><span id="title"></span></div>
-      <div class="lead-meta"><span class="pill" id="rootstate"></span><span class="mono" id="rootmodel"></span></div>
+      <div class="lead-meta"><span class="pill" id="rootstate"></span><span class="pill" id="rootaw" data-h="warn" data-i18n="state.awaiting" hidden></span><span class="mono" id="rootmodel"></span><span class="mono" id="rootcost"></span></div>
     </div>
     <span class="spacer"></span>
     <div class="tools" id="roottools"></div>
@@ -444,6 +755,37 @@
   <div id="kidhead"><h2 data-i18n="kids.title"></h2><span class="mono count" id="kidcount"></span><span class="spacer"></span><button class="btn ghost" id="closeAll" data-i18n="kids.closeAll"></button></div>
   <div id="kidlist"></div>
 </section>
+
+<main id="alt">
+  <section class="alt-view" id="boardView" hidden>
+    <header class="alt-head"><h2 data-i18n="view.board"></h2><span class="spacer"></span><select id="boardRoot" data-i18n-aria="board.filter"></select></header>
+    <div id="board"></div>
+  </section>
+  <section class="alt-view" id="activityView" hidden>
+    <header class="alt-head"><h2 data-i18n="view.activity"></h2><span class="spacer"></span><select id="actRoute" data-i18n-aria="activity.filter"></select></header>
+    <div id="activity"></div>
+  </section>
+</main>
+
+<section id="inboxPanel" aria-labelledby="inboxTitle">
+  <header class="inb-head">
+    <h2 id="inboxTitle" data-i18n="inbox.title"></h2>
+    <div class="seg" id="inboxTabs" role="tablist" data-i18n-aria="inbox.tabs">
+      <button type="button" role="tab" data-tab="open" data-i18n="inbox.tabOpen"></button>
+      <button type="button" role="tab" data-tab="all" data-i18n="inbox.tabAll"></button>
+    </div>
+    <span class="spacer"></span>
+    <button class="btn icon ghost" id="inboxClose" type="button" data-i18n-title="inbox.close" data-i18n-aria="inbox.close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+  </header>
+  <div class="inb-sub"><button class="btn sm" id="inboxNotify" type="button" data-i18n="inbox.notify" hidden></button><span id="inboxNotifyNote" hidden></span></div>
+  <div id="inboxList"></div>
+</section>
+
+<dialog id="searchDlg">
+  <h3 id="searchTitle"></h3>
+  <div class="wiz-body" id="searchBody"></div>
+  <footer class="wiz-foot"><span class="spacer"></span><button class="btn" id="searchClose" type="button" autofocus data-i18n="search.close"></button></footer>
+</dialog>
 
 <script type="module">
 import { Terminal } from "https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/+esm";
@@ -475,6 +817,9 @@ const ICONS = {
   sparkles: '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>',
   plug: '<path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>',
   restore: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+  folderOpen: '<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+  copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
 };
 const ic = (n, cls = "") => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
 
@@ -513,15 +858,19 @@ const modelOf = s => s.model ?? t("model.default");
 
 const XTERM_THEME = { background: "#0a0c10", foreground: "#e8eaf0", cursor: "#7aa7ff", cursorAccent: "#0a0c10", selectionBackground: "rgba(122,167,255,.32)" };
 
+// Phone layout (<= 760px): smaller terminal font; the CSS media query is the single switch.
+const phone = matchMedia("(max-width: 760px)");
+const termFont = () => (phone.matches ? 12 : 13);
+
 // Live terminal attached to a session: WebSocket open only while mounted.
 function attach(route, host) {
-  const term = new Terminal({ fontSize: 13, lineHeight: 1.1, fontFamily: "'JBMono Nerd', 'JetBrainsMono Nerd Font', Menlo, monospace", cursorBlink: true, scrollback: 5000, theme: XTERM_THEME });
+  const term = new Terminal({ fontSize: termFont(), lineHeight: 1.1, fontFamily: "'JBMono Nerd', 'JetBrainsMono Nerd Font', Menlo, monospace", cursorBlink: true, scrollback: 5000, theme: XTERM_THEME });
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(host);
   const ws = new WebSocket(`${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/pty/${enc(route)}`);
   const resize = () => { try { fit.fit(); } catch {} ws.readyState === 1 && ws.send(JSON.stringify({ t: "resize", cols: term.cols, rows: term.rows })); };
-  const live = { route, closed: false, term, fit, dispose: () => { ro.disconnect(); ws.onclose = null; ws.close(); term.dispose(); host.querySelector(".xterm")?.remove(); } };
+  const live = { route, closed: false, term, fit, resize, dispose: () => { ro.disconnect(); ws.onclose = null; ws.close(); term.dispose(); host.querySelector(".xterm")?.remove(); } };
   ws.onmessage = e => term.write(e.data);
   // Soft reload on (re)attach: a clean buffer takes the replayed scrollback without leftover escapes.
   ws.onopen = () => { term.reset(); resize(); };
@@ -560,6 +909,7 @@ const toolsHtml = () => `<div class="group"><select aria-label="${t("tools.model
   <div class="cl">
   <button class="btn icon ghost" data-a="new-child" title="${t("tools.newChild")}" aria-label="${t("tools.newChild")}">${ic("plus")}</button>
   <button class="btn icon ghost" data-a="edit" title="${t("tools.edit")}" aria-label="${t("tools.edit")}">${ic("edit")}</button>
+  <button class="btn icon ghost" data-a="files" title="${t("tools.files")}" aria-label="${t("tools.files")}">${ic("folderOpen")}</button>
   <button class="btn icon ghost" data-a="repaint" title="${t("tools.repaint")}" aria-label="${t("tools.repaint")}">${ic("repaint")}</button></div>
   <span class="sep" aria-hidden="true"></span>
   <div class="cl tools-end">
@@ -570,6 +920,7 @@ function wireTools(el, route) {
   el.querySelector('[data-a="restart"]').onclick = e => { e.stopPropagation(); api(`/api/sessions/${enc(route)}/restart`, { model: el.querySelector("select").value }).then(refresh); };
   el.querySelector('[data-a="toggle"]').onclick = e => { e.stopPropagation(); api(`/api/sessions/${enc(route)}/${byRoute(route).running ? "stop" : "start"}`, {}).then(refresh); };
   el.querySelector('[data-a="edit"]').onclick = e => { e.stopPropagation(); openEdit(route); };
+  el.querySelector('[data-a="files"]').onclick = e => { e.stopPropagation(); void openFiles(route); };
   el.querySelector('[data-a="new-child"]').onclick = e => { e.stopPropagation(); void openWizard("child", route); };
   el.querySelector('[data-a="archive"]').onclick = e => { e.stopPropagation(); void archive(route); };
   el.querySelector('[data-a="repaint"]').onclick = e => { e.stopPropagation(); repaint(route); };
@@ -708,6 +1059,16 @@ function renderTools(host, { folderInfo: info, recipe }) {
   const skillBoxes = groups.filter(([, list]) => list.length).flatMap(([key, list]) =>
     toolGroup(skillsSec, t(key), list.map(s => ({ value: s.name, label: s.name, note: s.note, checked: !explicit || explicit.includes(s.name) }))));
 
+  // Built-in tools: everything checked = no limit (tools:null). MCP and peer tools are never filtered by this list.
+  const builtin = CATALOG?.builtinTools ?? [];
+  const allowed = recipe && Array.isArray(recipe.tools) ? recipe.tools : null;
+  const RISKY = new Set(["bash", "eval", "edit", "write"]);
+  let toolBoxes = [];
+  if (builtin.length) {
+    const toolsSec = toolSection(host, "form.toolsTitle", t("form.toolsHint"));
+    toolBoxes = toolGroup(toolsSec, t("form.groupBuiltin"), builtin.map(name => ({ value: name, label: name, note: RISKY.has(name) ? t("form.toolRisk") : "", checked: !allowed || allowed.includes(name) })));
+  }
+
   return {
     mcp: () => {
       if (!userBoxes.length) return recipe?.mcp ?? "all";
@@ -717,6 +1078,10 @@ function renderTools(host, { folderInfo: info, recipe }) {
     skills: () => {
       if (!skillBoxes.length) return recipe?.skills ?? null;
       return skillBoxes.every(b => b.checked) ? null : skillBoxes.filter(b => b.checked).map(b => b.value);
+    },
+    tools: () => {
+      if (!toolBoxes.length) return recipe?.tools ?? null;
+      return toolBoxes.every(b => b.checked) ? null : toolBoxes.filter(b => b.checked).map(b => b.value);
     },
   };
 }
@@ -735,8 +1100,207 @@ function remapRoute(from, to) {
   }
 }
 
+// ---- cron preview: same grammar as the server (5 fields, local time; *, n, a-b, a,b, */n, a-b/n).
+const CRON_RANGES = [[0, 59], [0, 23], [1, 31], [1, 12], [0, 7]];
+function cronParse(expr) {
+  const parts = expr.trim().split(/\s+/);
+  if (parts.length !== 5) return null;
+  const sets = [];
+  for (let i = 0; i < 5; i++) {
+    const [lo, hi] = CRON_RANGES[i];
+    const set = new Set();
+    for (const item of parts[i].split(",")) {
+      const m = /^(\*|\d+(?:-\d+)?)(?:\/(\d+))?$/.exec(item);
+      if (!m) return null;
+      const step = m[2] === undefined ? 1 : Number(m[2]);
+      let a = lo, b = hi;
+      if (m[1] !== "*") {
+        const [x, y] = m[1].split("-").map(Number);
+        a = x;
+        if (y === undefined && m[2] !== undefined) return null; // `n/step` is not standard cron
+        b = y ?? x;
+      }
+      if (step < 1 || a < lo || b > hi || a > b) return null;
+      for (let v = a; v <= b; v += step) set.add(v);
+    }
+    sets.push(set);
+  }
+  if (sets[4].has(7)) sets[4].add(0); // day-of-week 7 = sunday
+  return sets;
+}
+// Date of the next fire after `after`; undefined = invalid expression, null = never within 5 years.
+function cronNext(expr, after = new Date()) {
+  const sets = cronParse(expr);
+  if (!sets) return undefined;
+  const [min, hour, dom, mon, dow] = sets;
+  const d = new Date(after);
+  d.setSeconds(0, 0);
+  d.setMinutes(d.getMinutes() + 1);
+  const limit = after.getTime() + 5 * 366 * 86_400_000;
+  const anyDom = expr.trim().split(/\s+/)[2] === "*", anyDow = expr.trim().split(/\s+/)[4] === "*";
+  while (d.getTime() < limit) {
+    if (!mon.has(d.getMonth() + 1)) { d.setMonth(d.getMonth() + 1, 1); d.setHours(0, 0, 0, 0); continue; }
+    const domOk = dom.has(d.getDate()), dowOk = dow.has(d.getDay());
+    if (!(anyDom || anyDow ? domOk && dowOk : domOk || dowOk)) { d.setDate(d.getDate() + 1); d.setHours(0, 0, 0, 0); continue; }
+    if (!hour.has(d.getHours())) { d.setHours(d.getHours() + 1, 0, 0, 0); continue; }
+    if (!min.has(d.getMinutes())) { d.setMinutes(d.getMinutes() + 1, 0, 0); continue; }
+    return d;
+  }
+  return null;
+}
+const fmtWhen = d => `${d.toLocaleString(LANG, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · ${ago(d.toISOString())}`;
+
+// ---- edit dialog state: automation rows are live objects the inputs write into.
+const edit = { scheds: [], trigs: [] };
+const hookUrl = id => `${location.origin}/hook/${id}`;
+
+function autoRow(item, html, wire) {
+  const row = document.createElement("div");
+  row.className = "auto-row";
+  row.innerHTML = html;
+  const f = k => row.querySelector(`[data-f="${k}"]`);
+  const del = f("del");
+  del.title = t("auto.remove");
+  del.setAttribute("aria-label", t("auto.remove"));
+  const sw = f("enabled");
+  sw.checked = item.enabled;
+  row.querySelector(".sw span").textContent = t("auto.enabled");
+  const off = () => row.toggleAttribute("data-off", !item.enabled);
+  sw.onchange = () => { item.enabled = sw.checked; off(); };
+  off();
+  wire(row, f);
+  return row;
+}
+
+function schedRow(item) {
+  return autoRow(item, `<div class="auto-line"><input class="mono-in" data-f="cron" spellcheck="false"><label class="sw"><input type="checkbox" data-f="enabled"><span></span></label><button class="btn icon ghost" type="button" data-f="del">${ic("trash")}</button></div><div class="auto-next"></div><textarea data-f="text" rows="2"></textarea>`, (row, f) => {
+    const cron = f("cron"), text = f("text"), next = row.querySelector(".auto-next");
+    cron.value = item.cron;
+    cron.placeholder = t("auto.cronPh");
+    cron.setAttribute("aria-label", t("auto.cron"));
+    text.value = item.text;
+    text.placeholder = t("auto.textPh");
+    text.setAttribute("aria-label", t("auto.text"));
+    const paint = () => {
+      const at = cronNext(item.cron);
+      next.dataset.h = at === undefined ? "bad" : "off";
+      next.textContent = at === undefined ? t("auto.cronInvalid") : at === null ? t("auto.cronNever") : t("auto.next", { when: fmtWhen(at) });
+    };
+    cron.oninput = () => { item.cron = cron.value; paint(); };
+    text.oninput = () => { item.text = text.value; };
+    f("del").onclick = () => { edit.scheds = edit.scheds.filter(x => x !== item); paintAuto(); syncEditHint(); };
+    paint();
+  });
+}
+
+function trigRow(item) {
+  return autoRow(item, `<div class="auto-line"><input data-f="name"><label class="sw"><input type="checkbox" data-f="enabled"><span></span></label><button class="btn icon ghost" type="button" data-f="del">${ic("trash")}</button></div><textarea data-f="template" rows="2"></textarea><div class="auto-line"><input class="mono-in" data-f="url" readonly spellcheck="false"><button class="btn sm" type="button" data-f="copy">${ic("copy")}<span></span></button></div><div class="auto-next"></div>`, (row, f) => {
+    const name = f("name"), template = f("template"), url = f("url"), copy = f("copy");
+    name.value = item.name;
+    name.placeholder = t("auto.namePh");
+    name.setAttribute("aria-label", t("auto.name"));
+    template.value = item.template;
+    template.placeholder = t("auto.templatePh", { body: "{{body}}" });
+    template.setAttribute("aria-label", t("auto.template"));
+    url.value = item.id ? hookUrl(item.id) : t("auto.urlAfterSave");
+    url.setAttribute("aria-label", t("auto.url"));
+    copy.disabled = !item.id;
+    copy.querySelector("span").textContent = t("auto.copyUrl");
+    row.querySelector(".auto-next").textContent = t("auto.templateHint", { body: "{{body}}" });
+    name.oninput = () => { item.name = name.value; };
+    template.oninput = () => { item.template = template.value; };
+    copy.onclick = async () => {
+      url.select();
+      await navigator.clipboard?.writeText(url.value).catch(() => {});
+      copy.querySelector("span").textContent = t("auto.copied");
+      setTimeout(() => { copy.querySelector("span").textContent = t("auto.copyUrl"); }, 1500);
+    };
+    f("del").onclick = () => { edit.trigs = edit.trigs.filter(x => x !== item); paintAuto(); syncEditHint(); };
+  });
+}
+
+function paintAuto() {
+  const fill = (host, list, make, emptyKey) => {
+    const empty = document.createElement("p");
+    empty.className = "auto-empty";
+    empty.textContent = t(emptyKey);
+    host.replaceChildren(...(list.length ? list.map(make) : [empty]));
+  };
+  fill($("editScheds"), edit.scheds, schedRow, "auto.noSchedules");
+  fill($("editTrigs"), edit.trigs, trigRow, "auto.noTriggers");
+}
+$("editAddSched").onclick = () => { edit.scheds.push({ id: "", cron: "", text: "", enabled: true }); paintAuto(); syncEditHint(); $("editScheds").lastElementChild.querySelector("input").focus(); };
+$("editAddTrig").onclick = () => { edit.trigs.push({ id: "", name: "", template: "", enabled: true }); paintAuto(); syncEditHint(); $("editTrigs").lastElementChild.querySelector("input").focus(); };
+
+// ---- environment: inherit radio + secrets checklist (names only; values never leave the server)
+const ENV_DEFAULT = { inherit: "all", secrets: [] };
+function paintEnv(env, stored) {
+  const inherit = $("editInherit");
+  inherit.replaceChildren(...["all", "minimal"].map(v => checkRow({ type: "radio", name: "editInherit", value: v, label: t(`edit.env.${v}`), note: t(`edit.env.${v}Note`), checked: env.inherit === v })));
+  const names = [...new Set([...(stored ?? []), ...env.secrets])];
+  const list = $("editSecrets");
+  if (!names.length) {
+    const none = document.createElement("p");
+    none.className = "auto-empty";
+    none.textContent = t("edit.envNoSecrets");
+    return list.replaceChildren(none);
+  }
+  list.replaceChildren(...names.map(n => checkRow({ name: "editSecret", value: n, label: n, note: stored && !stored.includes(n) ? t("edit.envNotStored") : "", off: !!stored && !stored.includes(n), checked: env.secrets.includes(n) })));
+}
+const readEnv = () => ({
+  inherit: document.querySelector('input[name="editInherit"]:checked')?.value ?? "all",
+  secrets: [...document.querySelectorAll('input[name="editSecret"]:checked')].map(b => b.value),
+});
+
+// ---- folder: conversation choice and relocation
+function paintConv() {
+  $("editConvs").replaceChildren(
+    checkRow({ type: "radio", name: "editConv", value: "keep", label: t("edit.convKeep"), note: t("edit.convKeepNote"), checked: true }),
+    checkRow({ type: "radio", name: "editConv", value: "new", label: t("edit.convNew"), note: t("edit.convNewNote"), checked: false }),
+  );
+}
+const editConv = () => document.querySelector('input[name="editConv"]:checked')?.value ?? "keep";
+const parentDir = p => p.replace(/\/[^/]*\/?$/, "") || "/";
+
+// POST /relocate: the server parks the session, moves the files and starts it again.
+async function relocate(route, folder, conversation) {
+  const r = await api(`/api/sessions/${enc(route)}/relocate`, { folder, conversation }).catch(() => null);
+  if (!r) return { error: t("conn.down") };
+  return r.ok ? await r.json().catch(() => ({ ok: true })) : { error: await r.text() };
+}
+
+async function editRelocate(folder) {
+  const route = $("editDlg").dataset.route;
+  $("editFolderErr").hidden = true;
+  $("editFolderOk").hidden = true;
+  const res = await relocate(route, folder, editConv());
+  if (res.error) {
+    $("editFolderErr").textContent = res.error;
+    $("editFolderErr").hidden = false;
+    return;
+  }
+  await refresh();
+  const fresh = byRoute(route);
+  if (fresh) {
+    editBase = { ...editBase, folder: fresh.folder, linked: fresh.linked };
+    $("editFolder").value = $("editFolder").title = fresh.folder;
+    $("editFolderIn").hidden = !fresh.linked;
+  }
+  $("editFolderOk").textContent = res.left?.length ? t("edit.folderLeft", { names: res.left.join(", ") }) : t("edit.folderMoved");
+  $("editFolderOk").hidden = false;
+}
+$("editFolderChange").onclick = async () => {
+  const route = $("editDlg").dataset.route;
+  const dir = await pickFolder({ start: parentDir(editBase.folder), title: t("edit.folderPick", { route }) });
+  if (dir && confirm(t("edit.folderConfirm", { route, folder: dir }))) await editRelocate(dir);
+};
+$("editFolderIn").onclick = async () => {
+  const route = $("editDlg").dataset.route;
+  if (confirm(t("edit.folderConfirmWs", { route }))) await editRelocate(null);
+};
+
 let editBase = null; // session snapshot the dialog was opened on
-let editTools = null; // null until the folder info has loaded: then mcp/skills are left out of the save
+let editTools = null; // null until the folder info has loaded: then mcp/skills/tools are left out of the save
 async function openEdit(route) {
   const s = byRoute(route);
   const dlg = $("editDlg");
@@ -752,15 +1316,78 @@ async function openEdit(route) {
   fillSelect($("editSmol"), modelItems(s.roles?.smol), s.roles?.smol ?? "");
   $("editCompact").value = s.compactPercent ?? "";
   $("editAdv").open = !!(s.roles?.task || s.roles?.smol || s.compactPercent != null);
-  $("editHint").hidden = !s.running;
+  $("editFolder").value = $("editFolder").title = s.folder;
+  $("editFolderIn").hidden = !s.linked;
+  $("editFolderErr").hidden = true;
+  $("editFolderOk").hidden = true;
+  paintConv();
+  $("editApprove").value = (s.approve ?? []).join("\n");
+  edit.scheds = (s.schedules ?? []).map(x => ({ ...x }));
+  edit.trigs = (s.triggers ?? []).map(x => ({ ...x }));
+  paintAuto();
+  const env = s.env ?? ENV_DEFAULT;
+  paintEnv(env, null);
+  $("editHint").hidden = true;
   $("editErr").hidden = true;
   const host = $("editTools");
   host.textContent = t("form.loading");
   dlg.showModal();
-  const res = await folderInfo(s.folder, route);
+  const [res, stored] = await Promise.all([
+    folderInfo(s.folder, route),
+    fetch("/api/secrets").then(r => (r.ok ? r.json() : null)).catch(() => null),
+  ]);
   if (!dlg.open || dlg.dataset.route !== route) return;
+  if (stored) paintEnv(readEnv(), stored);
   editTools = renderTools(host, { folderInfo: res.info, recipe: s });
+  syncEditHint();
 }
+
+// What the dialog changed against the snapshot. Only changed fields go out: re-sending an equal value in another shape
+// would flag restart-needed for nothing. `restartFields` lists the changed ones that only apply after a restart.
+function editDiff() {
+  const s = editBase;
+  const body = {};
+  const restartFields = [];
+  const put = (key, value, restart) => { body[key] = value; if (restart) restartFields.push(key); };
+  const purpose = $("editPurpose").value.trim();
+  if (purpose !== (s.purpose ?? "")) put("purpose", purpose, false);
+  const model = $("editModel").value;
+  if (model && model !== (s.model ?? "").split(":")[0]) put("model", model, true);
+  const thinking = $("editThinking").value || null;
+  if (!sameJson(thinking, s.thinking)) put("thinking", thinking, true);
+  const roles = { ...(s.roles ?? {}) };
+  for (const [key, id] of [["task", "editTask"], ["smol", "editSmol"]]) {
+    if ($(id).value) roles[key] = $(id).value;
+    else delete roles[key];
+  }
+  const nextRoles = Object.keys(roles).length ? roles : null;
+  if (!sameJson(nextRoles, s.roles)) put("roles", nextRoles, true);
+  const compactRaw = $("editCompact").value.trim();
+  const compact = compactRaw === "" ? null : Number(compactRaw);
+  if (!sameJson(compact, s.compactPercent)) put("compactPercent", compact, true);
+  if (editTools) {
+    const mcp = editTools.mcp();
+    if (!sameSelection(mcp, s.mcp ?? "all")) put("mcp", mcp, true);
+    const skills = editTools.skills();
+    if (!sameSelection(skills, s.skills ?? null)) put("skills", skills, true);
+    const tools = editTools.tools();
+    if (!sameSelection(tools, s.tools ?? null)) put("tools", tools, true);
+  }
+  const env = readEnv();
+  const base = s.env ?? ENV_DEFAULT;
+  if (env.inherit !== base.inherit || !sameSelection([...env.secrets].sort(), [...base.secrets].sort())) put("env", env, true);
+  // live fields: applied without a restart
+  const approve = $("editApprove").value.split("\n").map(l => l.trim()).filter(Boolean);
+  if (!sameJson(approve, s.approve ?? [])) put("approve", approve, false);
+  const schedules = edit.scheds.map(x => ({ id: x.id, cron: x.cron.trim(), text: x.text.trim(), enabled: x.enabled }));
+  if (!sameJson(schedules, (s.schedules ?? []).map(x => ({ id: x.id, cron: x.cron, text: x.text, enabled: x.enabled })))) put("schedules", schedules, false);
+  const triggers = edit.trigs.map(x => ({ id: x.id, name: x.name.trim(), template: x.template, enabled: x.enabled }));
+  if (!sameJson(triggers, (s.triggers ?? []).map(x => ({ id: x.id, name: x.name, template: x.template, enabled: x.enabled })))) put("triggers", triggers, false);
+  return { body, restartFields };
+}
+const syncEditHint = () => { $("editHint").hidden = !(editBase?.running && editDiff().restartFields.length); };
+$("editForm").addEventListener("input", syncEditHint);
+$("editForm").addEventListener("change", syncEditHint);
 
 async function saveEdit(restart) {
   const dlg = $("editDlg");
@@ -781,30 +1408,9 @@ async function saveEdit(restart) {
     s = editBase = { ...s, name, route: to };
     await refresh();
   }
-  // Only changed fields go out: re-sending an equal value in another shape would flag restart-needed for nothing.
-  const body = {};
-  const purpose = $("editPurpose").value.trim();
-  if (purpose !== (s.purpose ?? "")) body.purpose = purpose;
-  const model = $("editModel").value;
-  if (model && model !== (s.model ?? "").split(":")[0]) body.model = model;
-  const thinking = $("editThinking").value || null;
-  if (!sameJson(thinking, s.thinking)) body.thinking = thinking;
-  const roles = { ...(s.roles ?? {}) };
-  for (const [key, id] of [["task", "editTask"], ["smol", "editSmol"]]) {
-    if ($(id).value) roles[key] = $(id).value;
-    else delete roles[key];
-  }
-  const nextRoles = Object.keys(roles).length ? roles : null;
-  if (!sameJson(nextRoles, s.roles)) body.roles = nextRoles;
-  const compactRaw = $("editCompact").value.trim();
-  const compact = compactRaw === "" ? null : Number(compactRaw);
-  if (!sameJson(compact, s.compactPercent)) body.compactPercent = compact;
-  if (editTools) {
-    const mcp = editTools.mcp();
-    if (!sameSelection(mcp, s.mcp ?? "all")) body.mcp = mcp;
-    const skills = editTools.skills();
-    if (!sameSelection(skills, s.skills ?? null)) body.skills = skills;
-  }
+  for (const x of edit.scheds) if (cronNext(x.cron) === undefined || !x.text.trim()) return showErr(t("auto.errSchedule"));
+  for (const x of edit.trigs) if (!x.name.trim() || !x.template.trim()) return showErr(t("auto.errTrigger"));
+  const { body } = editDiff();
   body.restart = restart;
   const r = await api(`/api/sessions/${enc(route)}/edit`, body);
   if (!r.ok) return showErr(await r.text());
@@ -895,8 +1501,8 @@ function cardFor(k) {
   if (cards.has(k.route)) return cards.get(k.route);
   const el = document.createElement("article");
   el.className = "card";
-  el.innerHTML = `<button class="head" aria-expanded="false"><span class="dot"></span><span class="name"></span><span class="pill st"></span>${ic("chev", "chev")}
-      <span class="sub"><span class="mono model"></span><span class="purpose"></span></span></button>
+  el.innerHTML = `<button class="head" aria-expanded="false"><span class="dot"></span><span class="name"></span><span class="states"><span class="pill st"></span><span class="pill aw" data-h="warn" hidden>${t("state.awaiting")}</span></span>${ic("chev", "chev")}
+      <span class="sub"><span class="mono model"></span><span class="mono cost"></span><span class="purpose"></span></span></button>
     <div class="alert" role="alert"><span></span><button class="btn" data-a="fix"></button></div>
     <div class="issues"></div>
     <div class="bar">${toolsHtml()}<span class="spacer"></span>
@@ -944,6 +1550,8 @@ function paintIssues(host, issues, route) {
         button.className = "btn";
         button.textContent = t(`action.${action}`);
         button.onclick = async () => {
+          if (action === "relink") return relinkSession(route);
+          if (action === "archive") return archive(route); // a broken link has no recipe to resolve against
           const response = await api(`/api/sessions/${enc(route)}/resolve`, { code: issue.code, action });
           if (!response.ok) return alert(await response.text());
           await refresh();
@@ -1021,6 +1629,7 @@ async function refreshAux() {
   }
   $("globalissues").hidden = !globalIssues.length;
   paintIssues($("globalissues"), globalIssues);
+  await Promise.all([loadUsage(), loadInbox(), loadView()]);
 }
 
 function render() {
@@ -1037,6 +1646,10 @@ function render() {
     b.onclick = () => { selected = r.route; save("termui:selected", selected); render(); };
     $("roots").appendChild(b);
   }
+  const sel = $("rootSel");
+  sel.replaceChildren(...rs.map(r => new Option(`${r.name} (${kids(r.route).length})`, r.route)));
+  sel.value = selected ?? "";
+  sel.disabled = !rs.length;
   showRoot();
   if (!selected) {
     $("title").textContent = t("lead.none");
@@ -1073,7 +1686,7 @@ function render() {
     const isOpen = open.includes(k.route);
     const h = health(k);
     c.el.dataset.status = h;
-    c.el.dataset.h = h === "bad" ? "bad" : k.issues?.some(i => i.level === "ask" || i.level === "flag") ? "warn" : h;
+    c.el.dataset.h = h === "bad" ? "bad" : k.awaiting || k.issues?.some(i => i.level === "ask" || i.level === "flag") ? "warn" : h;
     c.el.classList.toggle("open", isOpen);
     c.el.classList.toggle("focused", focus === k.route);
     const head = c.el.querySelector(".head");
@@ -1109,6 +1722,7 @@ function render() {
     if (isOpen) paintOverlay(host, k);
     if (c.el.parentElement !== list) list.appendChild(c.el);
   }
+  paintLive();
 }
 
 $("closeAll").onclick = () => { save(`termui:open:${selected}`, []); save(`termui:focus:${selected}`, null); render(); };
@@ -1116,6 +1730,21 @@ $("editCancel").onclick = () => $("editDlg").close();
 $("editSave").onclick = () => void saveEdit(false);
 $("editSaveRestart").onclick = () => void saveEdit(true);
 $("editForm").onsubmit = e => { e.preventDefault(); void saveEdit(false); };
+
+// Phone layout: refit terminals when the media query flips; "more" panel holds orphans, archive and settings.
+phone.addEventListener("change", () => {
+  for (const live of [rootLive, ...[...cards.values()].map(c => c.live)]) {
+    if (!live) continue;
+    live.term.options.fontSize = termFont();
+    live.resize();
+  }
+});
+$("rootSel").onchange = e => { selected = e.target.value; save("termui:selected", selected); render(); };
+const asideMore = $("moreBtn").closest("aside");
+const setMore = on => { asideMore.classList.toggle("more", on); $("moreBtn").setAttribute("aria-expanded", String(on)); };
+$("moreBtn").onclick = () => setMore(!asideMore.classList.contains("more"));
+document.querySelector(".aside-more").addEventListener("click", e => { if (e.target.closest("button")) setMore(false); });
+document.addEventListener("click", e => { if (!e.target.closest("aside")) setMore(false); });
 
 // Draggable split between root terminal and child column.
 $("kidcol").style.width = `${ls("termui:kidw", 520)}px`;
@@ -1128,7 +1757,7 @@ $("split").onmousedown = e => {
 };
 
 function apply(list) {
-  const sig = l => JSON.stringify(l.map(s => [s.route, s.depth, s.name, s.running, s.state, s.hung, s.exit, s.desired, s.realModel, s.model, s.purpose, s.folder, s.issues]));
+  const sig = l => JSON.stringify(l.map(s => [s.route, s.depth, s.name, s.running, s.state, s.hung, s.exit, s.desired, s.realModel, s.model, s.purpose, s.folder, s.issues, s.awaiting]));
   const changed = sig(list) !== sig(sessions);
   sessions = list;
   if (changed || rootLive?.closed || [...cards.values()].some(c => c.live?.closed)) render();
@@ -1137,7 +1766,7 @@ const refresh = async () => apply(await (await fetch("/api/sessions")).json());
 
 // Session wizard, shared by "New root" and "New child": place (name, mission, folder, conversation) -> model and tools.
 // Create = one POST /api/sessions with the whole selection.
-const wiz = { mode: "root", parent: null, defaults: {}, res: null, loadedFolder: null, seq: 0, timer: 0, tools: null, toolsFor: null, convModel: null, pickerDir: null };
+const wiz = { mode: "root", parent: null, defaults: {}, presets: [], preset: null, res: null, loadedFolder: null, seq: 0, timer: 0, tools: null, toolsFor: null, convModel: null };
 let wizStep = 1;
 const wizLoc = () => document.querySelector('input[name="wizLoc"]:checked').value;
 const wizConv = () => document.querySelector('input[name="wizConv"]:checked')?.value ?? "";
@@ -1145,17 +1774,25 @@ const defaultModel = () => wiz.defaults.model?.split(":")[0] ?? "";
 const wizError = text => { $("wizErr").textContent = text ?? ""; $("wizErr").hidden = !text; };
 
 async function openWizard(mode, parent = null) {
-  wiz.defaults = await fetch(`/api/recipe-defaults?kind=${mode}`).then(r => (r.ok ? r.json() : {})).catch(() => ({}));
-  Object.assign(wiz, { mode, parent, res: null, loadedFolder: null, seq: wiz.seq + 1, tools: null, toolsFor: null, convModel: null, pickerDir: null });
+  const [defaults, presets] = await Promise.all([
+    fetch(`/api/recipe-defaults?kind=${mode}`).then(r => (r.ok ? r.json() : {})).catch(() => ({})),
+    fetch("/api/presets").then(r => (r.ok ? r.json() : [])).catch(() => []),
+  ]);
+  wiz.defaults = defaults;
+  wiz.presets = presets;
+  Object.assign(wiz, { mode, parent, res: null, loadedFolder: null, seq: wiz.seq + 1, tools: null, toolsFor: null, convModel: null, preset: null });
   clearTimeout(wiz.timer);
   $("wizTitle").textContent = mode === "child" ? t("wiz.titleChild", { parent }) : t("wiz.title");
   $("wizLocNew").textContent = mode === "child" ? t("wiz.locNewChild", { parent }) : t("wiz.locNew");
   for (const id of ["wizName", "wizPurpose", "wizFolder"]) $(id).value = "";
   document.querySelector('input[name="wizLoc"][value="new"]').checked = true;
-  for (const id of ["wizExisting", "wizPicker", "wizInfo"]) $(id).hidden = true;
+  for (const id of ["wizExisting", "wizInfo"]) $(id).hidden = true;
   fillSelect($("wizModel"), modelItems(defaultModel()), defaultModel());
   fillSelect($("wizThinking"), thinkingItems(), wiz.defaults.thinking ?? "");
   $("wizCompact").value = wiz.defaults.compactPercent ?? "";
+  fillSelect($("wizRole"), [["", t("wiz.roleNone")], ...wiz.presets.map(p => [p.role, p.label])], "");
+  $("wizRoleField").hidden = mode !== "child" || !wiz.presets.length; // presets are child roles
+  $("wizRoleSum").hidden = true;
   $("wizTools").replaceChildren();
   wizError();
   wizGo(1);
@@ -1221,18 +1858,49 @@ $("wizConvs").addEventListener("change", () => {
   else if (!id && wiz.convModel && $("wizModel").value === wiz.convModel) { $("wizModel").value = defaultModel(); wiz.convModel = null; }
 });
 
-// Folder picker: server-side directory listing, so the browser never needs filesystem access.
+// Folder picker: one dialog shared by the wizard, the edit dialog and the relink action.
+// The server lists directories, so the browser never needs filesystem access.
+const pick = { dir: null, result: null, resolve: null, hidden: ls("termui:pickHidden", false) };
+function pickFolder({ start, title }) {
+  return new Promise(resolve => {
+    pick.resolve = resolve;
+    pick.result = null;
+    $("pickTitle").textContent = title;
+    $("pickHidden").checked = pick.hidden;
+    $("pickNewName").value = "";
+    $("pickErr").hidden = true;
+    $("pickDlg").showModal();
+    void pickerLoad(start || undefined);
+  });
+}
+$("pickDlg").addEventListener("close", () => { const done = pick.resolve; pick.resolve = null; done?.(pick.result); });
+$("pickUse").onclick = () => { pick.result = pick.dir; $("pickDlg").close(); };
+$("pickCancel").onclick = () => $("pickDlg").close();
+$("pickHidden").onchange = e => { pick.hidden = e.target.checked; save("termui:pickHidden", pick.hidden); void pickerLoad(pick.dir || undefined); };
+const pickError = text => { $("pickErr").textContent = text; $("pickErr").hidden = false; };
+async function pickCreate() {
+  const name = $("pickNewName").value.trim();
+  if (!name || !pick.dir) return;
+  const r = await api("/api/fs/mkdir", { dir: pick.dir, name }).catch(() => null);
+  if (!r?.ok) return pickError(r ? await r.text() : t("conn.down"));
+  $("pickNewName").value = "";
+  await pickerLoad(`${pick.dir === "/" ? "" : pick.dir}/${name}`);
+}
+$("pickCreate").onclick = () => void pickCreate();
+$("pickNewName").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); void pickCreate(); } };
+
 async function pickerLoad(dir) {
-  const r = await fetch(`/api/fs${dir ? `?dir=${enc(dir)}` : ""}`).catch(() => null);
+  const q = new URLSearchParams();
+  if (dir) q.set("dir", dir);
+  if (pick.hidden) q.set("hidden", "1");
+  const r = await fetch(`/api/fs${q.size ? `?${q}` : ""}`).catch(() => null);
   if (!r?.ok) {
-    if (dir) return pickerLoad(undefined);
-    $("pickErr").textContent = r ? await r.text() : t("conn.down");
-    $("pickErr").hidden = false;
-    return;
+    if (dir) return pickerLoad(dir === "/" ? undefined : parentDir(dir)); // a missing folder falls back to its nearest parent
+    return pickError(r ? await r.text() : t("conn.down"));
   }
   $("pickErr").hidden = true;
   const d = await r.json();
-  wiz.pickerDir = d.dir;
+  pick.dir = d.dir;
   $("pickUp").disabled = !d.parent;
   $("pickUp").onclick = () => void pickerLoad(d.parent);
   const crumb = (label, path) => {
@@ -1271,6 +1939,101 @@ async function pickerLoad(dir) {
   $("pickList").scrollTop = 0;
 }
 
+// Broken link: pick the folder the project moved to, then rewrite the link (conversation kept).
+async function relinkSession(route) {
+  const dir = await pickFolder({ start: parentDir(byRoute(route)?.folder ?? "/"), title: t("relink.pickTitle", { route }) });
+  if (!dir) return;
+  const res = await relocate(route, dir, "keep");
+  if (res.error) return alert(res.error);
+  await refresh();
+  await refreshAux();
+}
+
+// Deliverables: files an agent produced. Outbox first, then recently changed files.
+const fmtSize = n => (n < 1024 ? `${n} B` : n < 1_048_576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1_048_576).toFixed(1)} MB`);
+function fileSet(route, title, files, emptyKey) {
+  const sec = document.createElement("section");
+  sec.className = "fileset";
+  sec.innerHTML = `<div class="sel-head"><span class="sel-title"></span><span class="mono count"></span></div><div class="dlg-list"></div>`;
+  sec.querySelector(".sel-title").textContent = title;
+  sec.querySelector(".count").textContent = String(files.length);
+  const list = sec.querySelector(".dlg-list");
+  if (!files.length) {
+    const none = document.createElement("p");
+    none.className = "auto-empty";
+    none.textContent = t(emptyKey);
+    list.appendChild(none);
+  }
+  for (const f of files) {
+    const a = document.createElement("a");
+    a.className = "listrow";
+    a.href = `/api/sessions/${enc(route)}/file?path=${enc(f.path)}`;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.innerHTML = `${ic("doc")}<span class="nm"></span><span class="meta"></span><span class="meta"></span>`;
+    a.querySelector(".nm").textContent = f.path;
+    a.title = f.path;
+    const [when, size] = a.querySelectorAll(".meta");
+    when.textContent = ago(new Date(f.mtime).toISOString());
+    size.textContent = fmtSize(f.size);
+    list.appendChild(a);
+  }
+  return sec;
+}
+async function openFiles(route) {
+  $("filesTitle").textContent = route;
+  $("filesBody").textContent = t("form.loading");
+  $("filesDlg").showModal();
+  const r = await fetch(`/api/sessions/${enc(route)}/files`).catch(() => null);
+  if (!r?.ok) { $("filesBody").textContent = r ? await r.text() : t("conn.down"); return; }
+  const { outbox, recent } = await r.json();
+  $("filesBody").replaceChildren(fileSet(route, t("files.outbox"), outbox, "files.noOutbox"), fileSet(route, t("files.recent"), recent, "files.noRecent"));
+}
+$("filesClose").onclick = () => $("filesDlg").close();
+
+// Secrets: names only; a value is write-only.
+const secretsError = text => { $("secretsErr").textContent = text ?? ""; $("secretsErr").hidden = !text; };
+const secretUrl = name => `/api/secrets/${enc(name)}`;
+async function paintSecrets() {
+  const r = await fetch("/api/secrets").catch(() => null);
+  const names = r?.ok ? await r.json() : [];
+  const empty = document.createElement("p");
+  empty.className = "auto-empty";
+  empty.textContent = t("secrets.empty");
+  $("secretsList").replaceChildren(...(names.length ? names.map(name => {
+    const row = document.createElement("div");
+    row.className = "listrow";
+    row.innerHTML = `<button type="button" class="picker-row nm"></button><button type="button" class="btn icon ghost">${ic("trash")}</button>`;
+    const [pickName, del] = row.querySelectorAll("button");
+    pickName.textContent = name;
+    pickName.title = t("secrets.replace");
+    pickName.onclick = () => { $("secretName").value = name; $("secretValue").focus(); };
+    del.title = t("secrets.delete");
+    del.setAttribute("aria-label", `${t("secrets.delete")} ${name}`);
+    del.onclick = async () => {
+      if (!confirm(t("secrets.confirmDelete", { name }))) return;
+      const res = await fetch(secretUrl(name), { method: "DELETE" });
+      if (!res.ok) return secretsError(await res.text());
+      secretsError();
+      await paintSecrets();
+    };
+    return row;
+  }) : [empty]));
+}
+async function saveSecret() {
+  secretsError();
+  if (!$("secretName").reportValidity() || !$("secretValue").reportValidity()) return;
+  const res = await fetch(secretUrl($("secretName").value), { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ value: $("secretValue").value }) });
+  if (!res.ok) return secretsError(await res.text());
+  $("secretName").value = "";
+  $("secretValue").value = "";
+  await paintSecrets();
+}
+$("secretsBtn").onclick = () => { secretsError(); $("secretName").value = ""; $("secretValue").value = ""; $("secretsDlg").showModal(); void paintSecrets(); };
+$("secretsSave").onclick = () => void saveSecret();
+$("secretsForm").onsubmit = e => { e.preventDefault(); void saveSecret(); };
+$("secretsClose").onclick = () => $("secretsDlg").close();
+
 function wizGo(step) {
   wizStep = step;
   for (const sec of document.querySelectorAll("#wizForm section")) sec.hidden = Number(sec.dataset.w) !== step;
@@ -1279,12 +2042,46 @@ function wizGo(step) {
   $("wizNext").hidden = step === 2;
   $("wizDone").hidden = step !== 2;
   if (step !== 2) return;
-  // Rebuilt only when the folder changed, so going back and forth keeps the user's choices.
+  // Rebuilt only when the folder or the role changed, so going back and forth keeps the user's choices.
   const existing = wizLoc() === "existing";
-  const key = existing ? $("wizFolder").value.trim() : "";
+  const key = `${existing ? $("wizFolder").value.trim() : ""}|${$("wizRole").value}`;
   if (wiz.toolsFor === key) return;
   wiz.toolsFor = key;
-  wiz.tools = renderTools($("wizTools"), { folderInfo: existing ? wiz.res?.info : undefined });
+  const p = wiz.preset;
+  wiz.tools = renderTools($("wizTools"), { folderInfo: existing ? wiz.res?.info : undefined, recipe: p ? { mcp: p.mcp, skills: p.skills, tools: p.tools } : undefined });
+  paintRoleSummary();
+}
+
+// Read-only summary of what a role brings beyond the selectors: approvals, schedules, environment.
+function paintRoleSummary() {
+  const box = $("wizRoleSum");
+  const p = wiz.preset;
+  box.hidden = !p;
+  if (!p) return box.replaceChildren();
+  const title = document.createElement("h4");
+  title.textContent = t("wiz.roleSummary", { role: wiz.presets.find(x => x.preset === p)?.label ?? "" });
+  const dl = document.createElement("dl");
+  const entry = (key, items) => {
+    const dt = document.createElement("dt");
+    dt.textContent = t(key);
+    const dd = document.createElement("dd");
+    const ul = document.createElement("ul");
+    for (const text of items) {
+      const li = document.createElement("li");
+      li.append(text);
+      ul.appendChild(li);
+    }
+    dd.appendChild(ul);
+    dl.append(dt, dd);
+  };
+  const code = text => Object.assign(document.createElement("code"), { textContent: text });
+  const pre = (key, nodes) => entry(key, nodes);
+  pre("wiz.roleApprove", p.approve?.length ? p.approve.map(code) : [t("wiz.roleNoApprove")]);
+  pre("wiz.roleSchedules", p.schedules?.length ? p.schedules.map(s => { const span = document.createElement("span"); span.append(code(s.cron), ` · ${s.text}`); return span; }) : [t("wiz.roleNoSchedules")]);
+  pre("wiz.roleEnv", [t(`edit.env.${p.env?.inherit ?? "all"}`)]);
+  const missing = (p.mcp ?? []).filter(n => !(n in (CATALOG?.mcpServers ?? {})));
+  if (missing.length) pre("wiz.roleMissingMcp", [missing.join(", ")]);
+  box.replaceChildren(title, dl);
 }
 
 $("newRoot").querySelector("summary").addEventListener("click", e => { e.preventDefault(); void openWizard("root"); });
@@ -1294,14 +2091,23 @@ for (const radio of document.querySelectorAll('input[name="wizLoc"]'))
     if (wizLoc() === "existing") void loadInfo();
   };
 $("wizFolder").oninput = () => scheduleInfo();
-$("wizBrowse").onclick = () => {
-  $("wizPicker").hidden = !$("wizPicker").hidden;
-  if (!$("wizPicker").hidden) void pickerLoad($("wizFolder").value.trim() || undefined);
-};
-$("pickUse").onclick = () => {
-  $("wizFolder").value = wiz.pickerDir;
-  $("wizPicker").hidden = true;
+$("wizBrowse").onclick = async () => {
+  const dir = await pickFolder({ start: $("wizFolder").value.trim() || undefined, title: t("wiz.browse") });
+  if (!dir) return;
+  $("wizFolder").value = dir;
   scheduleInfo(0);
+};
+$("wizRole").onchange = () => {
+  const prev = wiz.preset;
+  const next = wiz.presets.find(p => p.role === $("wizRole").value)?.preset ?? null;
+  wiz.preset = next;
+  const purpose = $("wizPurpose");
+  if (next && (!purpose.value.trim() || purpose.value === prev?.purpose)) purpose.value = next.purpose;
+  else if (!next && purpose.value === prev?.purpose) purpose.value = "";
+  const model = (next?.model ?? wiz.defaults.model ?? "").split(":")[0];
+  fillSelect($("wizModel"), modelItems(model), model);
+  fillSelect($("wizThinking"), thinkingItems(), next?.thinking ?? wiz.defaults.thinking ?? "");
+  wiz.toolsFor = null; // step 2 is rebuilt from the role
 };
 $("wizCancel").onclick = () => $("wizDlg").close();
 $("wizBack").onclick = () => wizGo(1);
@@ -1324,7 +2130,7 @@ $("wizDone").onclick = async () => {
     parent: wiz.mode === "child" ? wiz.parent : null, name, purpose: $("wizPurpose").value.trim(), start: true,
     model: $("wizModel").value || undefined, thinking: $("wizThinking").value || null,
     compactPercent: compact === "" ? null : Number(compact),
-    mcp: wiz.tools.mcp(), skills: wiz.tools.skills(),
+    mcp: wiz.tools.mcp(), skills: wiz.tools.skills(), tools: wiz.tools.tools(), preset: $("wizRole").value || undefined,
   };
   if (wizLoc() === "existing") {
     body.folder = $("wizFolder").value.trim();
@@ -1333,6 +2139,7 @@ $("wizDone").onclick = async () => {
   $("wizDone").disabled = true;
   const r = await api("/api/sessions", body).finally(() => { $("wizDone").disabled = false; });
   if (!r.ok) return wizError(await r.text());
+  const warnings = (await r.json().catch(() => ({}))).warnings ?? [];
   $("wizDlg").close();
   const route = body.parent ? `${body.parent}/${name}` : name;
   selected = route.split("/")[0];
@@ -1340,7 +2147,420 @@ $("wizDone").onclick = async () => {
   if (body.parent) save(`termui:open:${selected}`, [...openOf(selected).filter(n => n !== route), route]);
   await refresh();
   await refreshAux();
+  if (warnings.length) alert(t("wiz.roleWarnings", { list: warnings.join(" · ") }));
 };
+
+// ---- Work layer: costs, awaiting pills, inbox drawer, notifications, board, activity, search ----
+const getJson = async path => {
+  const r = await fetch(path).catch(() => null);
+  return r?.ok ? r.json().catch(() => null) : null;
+};
+const mk = (tag, cls, text) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+};
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const tIf = (key, fallback) => (DICT[key] !== undefined ? t(key) : fallback); // kinds and statuses the server may add before this UI has a label
+const money = v => `$${(v ?? 0).toFixed(2)}`;
+const stamp = iso => {
+  const d = new Date(iso);
+  const today = new Date().toDateString() === d.toDateString();
+  return d.toLocaleString(LANG, today ? { timeStyle: "medium" } : { dateStyle: "short", timeStyle: "short" });
+};
+
+// Today's cost per session and the awaiting pill: painted without a full render.
+let usageToday = new Map();
+async function loadUsage() {
+  const rows = await getJson("/api/usage/sessions?days=1");
+  if (!Array.isArray(rows)) return;
+  usageToday = new Map(rows.map(r => [r.route, r.cost]));
+  paintLive();
+}
+function paintLive() {
+  const root = selected ? byRoute(selected) : undefined;
+  $("rootaw").hidden = !root?.awaiting;
+  $("rootcost").textContent = root ? money(usageToday.get(root.route)) : "";
+  $("rootcost").title = t("usage.today");
+  roots().forEach((r, i) => {
+    const count = $("roots").children[i]?.querySelector(".count");
+    if (!count) return;
+    if (sessions.some(x => x.awaiting && (x.route === r.route || x.route.startsWith(`${r.route}/`)))) count.dataset.h = "warn";
+    else delete count.dataset.h;
+  });
+  for (const [route, c] of cards) {
+    c.el.querySelector(".aw").hidden = !byRoute(route)?.awaiting;
+    const cost = c.el.querySelector(".cost");
+    cost.textContent = money(usageToday.get(route));
+    cost.title = t("usage.today");
+  }
+}
+
+// Select a session from anywhere: its root, and the child card opened.
+function openRoute(route) {
+  if (!byRoute(route)) return;
+  const root = route.split("/")[0];
+  selected = root;
+  save("termui:selected", root);
+  if (route !== root) save(`termui:open:${root}`, [...openOf(root).filter(n => n !== route), route]);
+  closeInbox();
+  setView("sessions");
+  render();
+}
+// A REQ names its child by route or by short name; fall back to the root.
+const reqRoute = r => [r.child, r.child && `${r.root}/${r.child}`, r.root].find(n => n && byRoute(n));
+
+// Inbox: the drawer keeps item DOM keyed by id, so a push never wipes a half-edited approval.
+const INBOX = { items: [], tab: ls("termui:inboxTab", "open") === "all" ? "all" : "open", seen: null };
+const inboxEls = new Map(); // id -> { el, sig }
+const KIND_H = { approval: "warn", question: "warn", blocked: "bad", done: "ok", issue: "warn", digest: "off", mcp: "bad" };
+const STATUS_H = { approved: "ok", answered: "ok", rejected: "bad", dismissed: "off" };
+const inboxOpenNow = () => $("inboxPanel").classList.contains("open");
+
+function setCounts(open, approvals) {
+  const bell = $("bell");
+  $("bellBadge").hidden = !open;
+  $("bellBadge").textContent = open > 99 ? "99+" : String(open);
+  if (approvals) bell.dataset.h = "warn";
+  else delete bell.dataset.h;
+  const label = t("inbox.bell", { n: open });
+  bell.title = label;
+  bell.setAttribute("aria-label", label);
+}
+async function loadInbox() {
+  const open = await getJson("/api/inbox?status=open&limit=100");
+  if (!Array.isArray(open)) return;
+  setCounts(open.length, open.filter(i => i.kind === "approval").length);
+  if (!inboxOpenNow()) return;
+  const items = INBOX.tab === "open" ? open : await getJson("/api/inbox?status=all&limit=100");
+  if (!Array.isArray(items)) return;
+  INBOX.items = items;
+  paintInbox();
+}
+function paintInbox() {
+  const list = $("inboxList");
+  const keep = new Set(INBOX.items.map(i => i.id));
+  for (const [id, c] of inboxEls) if (!keep.has(id)) { c.el.remove(); inboxEls.delete(id); }
+  list.querySelector(".empty")?.remove();
+  for (const item of INBOX.items) {
+    const sig = JSON.stringify(item);
+    const old = inboxEls.get(item.id);
+    if (old?.sig === sig) continue;
+    const el = inboxCard(item);
+    if (old) old.el.replaceWith(el);
+    inboxEls.set(item.id, { el, sig });
+  }
+  const want = INBOX.items.map(i => inboxEls.get(i.id).el);
+  if (want.some((el, i) => list.children[i] !== el)) list.append(...want);
+  if (!want.length) list.append(mk("p", "empty", t(INBOX.tab === "open" ? "inbox.empty" : "inbox.emptyAll")));
+}
+function inboxCard(item) {
+  const open = item.status === "open";
+  const el = mk("article", "inb");
+  el.dataset.h = open ? KIND_H[item.kind] ?? "off" : "off";
+  el.dataset.st = open ? "open" : "closed";
+  const top = mk("div", "inb-top");
+  const kind = mk("span", "pill", tIf(`inbox.kind${cap(item.kind)}`, item.kind));
+  kind.dataset.h = KIND_H[item.kind] ?? "off";
+  top.append(kind);
+  if (!open) {
+    const st = mk("span", "pill", tIf(`inbox.status${cap(item.status)}`, item.status));
+    st.dataset.h = STATUS_H[item.status] ?? "off";
+    top.append(st);
+  }
+  const canOpen = !!byRoute(item.route);
+  const route = mk(canOpen ? "button" : "span", "inb-route", item.route);
+  if (canOpen) { route.type = "button"; route.onclick = () => openRoute(item.route); }
+  const when = mk("span", "mono", ago(item.ts));
+  when.title = new Date(item.ts).toLocaleString(LANG);
+  top.append(route, mk("span", "spacer"), when);
+  const ctl = mk("div", "inb-ctl");
+  const err = mk("div", "formerr");
+  err.hidden = true;
+  // An open approval already shows the full input in its editor, and a question often repeats its title: hide the echo.
+  const echo = (item.kind === "approval" && open) || item.body === item.title;
+  // Issue items carry the issue code as title: show the localized issue text when this UI has one.
+  const title = item.kind === "issue" && item.data?.code ? tIf(`issue.${item.data.code}`, item.title) : item.title;
+  el.append(top, mk("div", "inb-title", title), mk("div", "inb-body", echo ? "" : item.body), ctl, err);
+  const button = (cls, text, onclick) => {
+    const b = mk("button", `btn ${cls}`.trim(), text);
+    b.type = "button";
+    b.onclick = onclick;
+    return b;
+  };
+  const act = async (action, body = {}) => {
+    err.hidden = true;
+    el.setAttribute("aria-busy", "true");
+    const r = await api(`/api/inbox/${item.id}/${action}`, body).catch(() => null);
+    if (r?.ok) return void (await Promise.all([loadInbox(), refresh()]));
+    el.removeAttribute("aria-busy");
+    err.textContent = r ? await r.text() : t("conn.down");
+    err.hidden = false;
+  };
+  const textInput = (rows, ph) => {
+    const area = mk("textarea");
+    area.rows = rows;
+    area.placeholder = ph;
+    area.setAttribute("aria-label", ph);
+    return area;
+  };
+
+  if (item.kind === "approval") {
+    const tool = mk("div", "inb-tool");
+    tool.append(mk("span", "", t("inbox.tool")), mk("span", "mono", item.data?.toolName ?? ""));
+    ctl.append(tool);
+    const pretty = JSON.stringify(item.data?.input ?? {}, null, 2);
+    if (open) {
+      ctl.append(mk("div", "inb-tool", t("inbox.input")));
+      const area = mk("textarea", "mono");
+      area.value = pretty;
+      area.spellcheck = false;
+      area.rows = Math.min(14, pretty.split("\n").length + 1);
+      area.setAttribute("aria-label", t("inbox.input"));
+      const approve = button("primary", t("inbox.approve"), () => void act("approve", {}));
+      const edited = button("", t("inbox.approveEdited"), () => { const text = parsed(); if (text !== null) void act("approve", { answer: text }); });
+      edited.disabled = true;
+      // Edited input must be a JSON object different from the original; returns its compact text or null.
+      const parsed = () => {
+        if (area.value === pretty) return null;
+        try {
+          const v = JSON.parse(area.value);
+          return v && typeof v === "object" && !Array.isArray(v) ? JSON.stringify(v) : null;
+        } catch { return null; }
+      };
+      area.oninput = () => {
+        const text = parsed();
+        edited.disabled = text === null;
+        err.textContent = t("inbox.inputInvalid");
+        err.hidden = text !== null || area.value === pretty;
+      };
+      const actions = mk("div", "inb-actions");
+      actions.append(approve, edited);
+      const reject = mk("div", "inb-reject");
+      const reason = mk("input");
+      reason.placeholder = t("inbox.rejectReason");
+      reason.setAttribute("aria-label", t("inbox.rejectReason"));
+      const send = () => void act("reject", { answer: reason.value.trim() || undefined });
+      reason.onkeydown = e => e.key === "Enter" && send();
+      reject.append(reason, button("danger", t("inbox.reject"), send));
+      ctl.append(area, actions, reject);
+    }
+  } else if (item.kind === "question" && open) {
+    const options = item.data?.options ?? [];
+    if (options.length) {
+      const row = mk("div", "inb-actions");
+      for (const o of options) row.append(button("", o, () => void act("answer", { answer: o })));
+      ctl.append(row);
+    } else {
+      const area = textInput(3, t("inbox.answerPh"));
+      const send = button("primary", t("inbox.send"), () => void act("answer", { answer: area.value.trim() }));
+      send.disabled = true;
+      area.oninput = () => { send.disabled = !area.value.trim(); };
+      area.onkeydown = e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && area.value.trim()) send.click(); };
+      const row = mk("div", "inb-actions");
+      row.append(send);
+      ctl.append(area, row);
+    }
+  } else if (open) {
+    const row = mk("div", "inb-actions");
+    if (canOpen) row.append(button("", t("inbox.openSession"), () => openRoute(item.route)));
+    row.append(button("ghost", t("inbox.dismiss"), () => void act("dismiss", {})));
+    ctl.append(row);
+  }
+  if (!open && item.answer) ctl.append(mk("div", "inb-body", t("inbox.answerIs", { text: item.answer })));
+  return el;
+}
+
+function openInbox() {
+  $("inboxPanel").classList.add("open");
+  paintNotify();
+  paintTabs();
+  void loadInbox();
+  $("inboxClose").focus();
+}
+function closeInbox() {
+  if (!inboxOpenNow()) return;
+  $("inboxPanel").classList.remove("open");
+  $("bell").focus();
+}
+function paintTabs() {
+  for (const b of document.querySelectorAll("#inboxTabs button")) b.setAttribute("aria-selected", String(b.dataset.tab === INBOX.tab));
+}
+function paintNotify() {
+  const perm = "Notification" in window ? Notification.permission : "unsupported";
+  $("inboxNotify").hidden = perm !== "default";
+  $("inboxNotifyNote").hidden = perm !== "granted" && perm !== "denied";
+  $("inboxNotifyNote").textContent = perm === "granted" ? t("inbox.notifyOn") : perm === "denied" ? t("inbox.notifyDenied") : "";
+}
+$("bell").onclick = () => (inboxOpenNow() ? closeInbox() : openInbox());
+$("inboxClose").onclick = closeInbox;
+$("inboxNotify").onclick = async () => { await Notification.requestPermission(); paintNotify(); };
+for (const b of document.querySelectorAll("#inboxTabs button"))
+  b.onclick = () => { INBOX.tab = b.dataset.tab; save("termui:inboxTab", INBOX.tab); paintTabs(); void loadInbox(); };
+document.addEventListener("keydown", e => { if (e.key === "Escape" && inboxOpenNow() && !document.querySelector("dialog[open]")) closeInbox(); });
+
+// SSE `inbox` event: counts for the bell, and a browser notification for a new item while the tab is hidden.
+function notify(item) {
+  if (!document.hidden || !("Notification" in window) || Notification.permission !== "granted") return;
+  const n = new Notification(item.title, { body: item.body.slice(0, 200), tag: String(item.id) });
+  n.onclick = () => { window.focus(); openInbox(); n.close(); };
+}
+function onInboxEvent(e) {
+  const d = JSON.parse(e.data);
+  setCounts(d.open, d.approvals);
+  const latest = d.latest;
+  if (INBOX.seen === null) INBOX.seen = latest?.id ?? 0; // first event after connect: history, not news
+  else if (latest && latest.id > INBOX.seen) {
+    INBOX.seen = latest.id;
+    if (latest.status === "open") notify(latest);
+  }
+  if (inboxOpenNow()) void loadInbox();
+  void loadView();
+}
+
+// Views: Sessions (columns) / Board (REQs) / Activity (audit timeline).
+const VIEWS = ["sessions", "board", "activity"];
+let view = VIEWS.includes(ls("termui:view", "sessions")) ? ls("termui:view", "sessions") : "sessions";
+function setView(v) {
+  view = v;
+  save("termui:view", v);
+  document.body.dataset.view = v;
+  for (const b of document.querySelectorAll("#views button")) b.setAttribute("aria-selected", String(b.dataset.v === v));
+  $("boardView").hidden = v !== "board";
+  $("activityView").hidden = v !== "activity";
+  void loadView();
+}
+const loadView = () => (view === "board" ? loadBoard() : view === "activity" ? loadActivity() : undefined);
+for (const b of document.querySelectorAll("#views button")) b.onclick = () => setView(b.dataset.v);
+function fillFilter(sel, allKey, routes) {
+  const sig = routes.join("|");
+  if (sel.dataset.sig === sig) return;
+  sel.dataset.sig = sig;
+  fillSelect(sel, [["", t(allKey)], ...routes.map(r => [r, r])], routes.includes(sel.value) ? sel.value : "");
+}
+
+const DAY = 86_400_000;
+async function loadBoard() {
+  fillFilter($("boardRoot"), "board.allRoots", roots().map(r => r.route));
+  const root = $("boardRoot").value;
+  const rows = await getJson(`/api/reqs?limit=200${root ? `&root=${enc(root)}` : ""}`);
+  if (Array.isArray(rows) && view === "board") paintBoard(rows);
+}
+function paintBoard(rows) {
+  const cutoff = Date.now() - DAY;
+  const newest = key => (a, b) => (Date.parse(b[key] ?? "") || 0) - (Date.parse(a[key] ?? "") || 0);
+  const cols = [
+    ["board.open", "work", rows.filter(r => r.status === "open").sort(newest("opened"))],
+    ["board.blocked", "bad", rows.filter(r => r.status === "blocked").sort(newest("opened"))],
+    ["board.done", "ok", rows.filter(r => (r.status === "done" || r.status === "partial") && r.closed && Date.parse(r.closed) >= cutoff).sort(newest("closed"))],
+  ];
+  const scroll = [...$("board").querySelectorAll(".col-list")].map(l => l.scrollTop);
+  $("board").replaceChildren(...cols.map(([key, h, list], i) => {
+    const col = mk("section", "col");
+    const head = mk("div", "col-head");
+    const dot = mk("span", "dot");
+    dot.dataset.h = h;
+    head.append(dot, mk("span", "", t(key)), mk("span", "spacer"), mk("span", "mono count", String(list.length)));
+    const body = mk("div", "col-list");
+    if (!list.length) body.append(mk("p", "empty", t("board.empty")));
+    for (const r of list) body.append(reqCard(r));
+    col.append(head, body);
+    queueMicrotask(() => { body.scrollTop = scroll[i] ?? 0; });
+    return col;
+  }));
+}
+function reqCard(r) {
+  const b = mk("button", "req");
+  b.type = "button";
+  b.dataset.h = { open: "work", blocked: "bad", partial: "warn", done: "ok" }[r.status] ?? "off";
+  const top = mk("div", "req-top");
+  top.append(mk("span", "req-key", r.num ?? r.key));
+  if (r.status === "partial") {
+    const pill = mk("span", "pill", t("board.partial"));
+    pill.dataset.h = "warn";
+    top.append(pill);
+  }
+  const done = r.status === "done" || r.status === "partial";
+  top.append(mk("span", "spacer"), mk("span", "mono", ago((done && r.closed) || r.opened)));
+  const child = r.child ? (r.child.startsWith(`${r.root}/`) ? r.child.slice(r.root.length + 1) : r.child) : t("board.noChild");
+  const meta = mk("div", "req-meta");
+  meta.append(mk("span", "mono", child), mk("span", "spacer"), mk("span", "mono", money(r.cost)));
+  const title = mk("div", "req-title", r.title ?? "");
+  title.title = r.title ?? "";
+  b.append(top, title, meta);
+  b.onclick = () => { const route = reqRoute(r); if (route) openRoute(route); };
+  return b;
+}
+
+const actH = kind => (/fail|error|reject|crash|kill/.test(kind) ? "bad" : /issue|ask|block|exit|stop/.test(kind) ? "warn" : /approv|fire|spawn|start|answer|done/.test(kind) ? "ok" : "off");
+async function loadActivity() {
+  fillFilter($("actRoute"), "activity.allRoutes", sessions.map(s => s.route).sort());
+  const route = $("actRoute").value;
+  const rows = await getJson(`/api/activity?limit=200${route ? `&route=${enc(route)}` : ""}`);
+  if (!Array.isArray(rows) || view !== "activity") return;
+  const host = $("activity");
+  const sig = `${route}|${rows.map(r => r.id).join(",")}`;
+  if (host.dataset.sig === sig) return;
+  host.dataset.sig = sig;
+  if (!rows.length) return host.replaceChildren(mk("p", "empty", t("activity.empty")));
+  host.replaceChildren(...rows.map(r => {
+    const row = mk("div", "act");
+    const when = mk("span", "mono", stamp(r.ts));
+    const canOpen = !!byRoute(r.route);
+    const where = mk(canOpen ? "button" : "span", "route", r.route);
+    if (canOpen) { where.type = "button"; where.onclick = () => openRoute(r.route); }
+    const kind = mk("span", "pill", r.kind);
+    kind.dataset.h = actH(r.kind);
+    const text = Object.entries(r.data ?? {}).map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`).join(" · ").slice(0, 400);
+    const what = mk("span", "mono", text);
+    what.title = text;
+    row.append(when, where, kind, what);
+    return row;
+  }));
+}
+$("boardRoot").onchange = () => void loadBoard();
+$("actRoute").onchange = () => void loadActivity();
+
+// Search: Enter in the sidebar field -> grouped results; a click selects the session.
+async function runSearch(q) {
+  if (!q) return;
+  const res = await getJson(`/api/search?q=${enc(q)}`);
+  const body = $("searchBody");
+  body.replaceChildren();
+  $("searchTitle").textContent = t("search.title", { q });
+  const hit = (head, status, text, route) => {
+    const b = mk("button", "hit");
+    b.type = "button";
+    const top = mk("div", "hit-top");
+    top.append(mk("span", "mono", head));
+    if (status) top.append(mk("span", "mono", status));
+    b.append(top, mk("div", "hit-text", text));
+    b.onclick = () => { $("searchDlg").close(); if (route) openRoute(route); };
+    return b;
+  };
+  const group = (key, rows, build) => {
+    if (!rows?.length) return false;
+    const g = mk("section", "hits-group");
+    g.append(mk("h4", "", t(key)), ...rows.map(build));
+    body.append(g);
+    return true;
+  };
+  const found = [
+    group("search.reqs", res?.reqs, r => hit(r.num ?? r.key, r.status, r.title, reqRoute(r))),
+    group("search.inbox", res?.inbox, i => hit(i.route, i.kind, i.title, i.route)),
+    group("search.conversations", res?.conversations, c => hit(c.route, stamp(c.ts), c.snippet, c.route)),
+  ];
+  if (!found.some(Boolean)) body.append(mk("p", res ? "empty" : "formerr", t(res ? "search.none" : "conn.down")));
+  $("searchDlg").showModal();
+}
+$("search").onkeydown = e => { if (e.key === "Enter") void runSearch(e.target.value.trim()); };
+$("searchClose").onclick = () => $("searchDlg").close();
+
+paintTabs();
+paintNotify();
+setCounts(0, 0);
+setView(view);
 
 await document.fonts.load("13px 'JBMono Nerd'").catch(() => {});
 await refresh();
@@ -1360,6 +2580,7 @@ function listen() {
   es.onmessage = e => { lastMsg = Date.now(); conn(true); apply(JSON.parse(e.data)); };
   es.addEventListener("open", () => { lastMsg = Date.now(); conn(true); });
   es.addEventListener("ping", () => { lastMsg = Date.now(); conn(true); }); // SSE comments never reach JS, so the ping is a named event
+  es.addEventListener("inbox", onInboxEvent);
   es.onerror = () => conn(false); // EventSource retries by itself
 }
 setInterval(() => Date.now() - lastMsg > 25_000 && conn(false), 5_000);

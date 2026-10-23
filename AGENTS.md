@@ -21,7 +21,11 @@ Applies to every text an agent reads: protocols, skills, sandbox `AGENTS.md`, `-
 - `term-ui/server.ts` — Bun server: owns every agent PTY, registry, REST + SSE + WebSocket. Single source of session state.
 - `term-ui/registry/<name>.json` — one recipe per session (generated `<name>.config.yml` next to it). Edit through the API, not by hand while the server runs.
 - `term-ui/orch.ts` — CLI over the API; the only way roots create or manage sessions.
-- `term-ui/orch-ext.ts` — omp extension loaded into every session: hello, state, heartbeat, root notices.
+- `term-ui/orch-ext.ts` — omp extension loaded into every session: hello, state, heartbeat, root notices, usage/REQ/MCP-health reports, the `approve` tool gate, `orch_ask_user` (roots).
+- `term-ui/store.ts` — SQLite store `<ws>/.orch/orch.db` (events/audit, REQ register, inbox, usage, runs, search index); the only place with SQL.
+- `term-ui/core-api.ts` — HTTP handlers of the work layer (inbox, approvals, REQs, usage, activity, search, digest, extension `report-*`).
+- `term-ui/token.ts` — server access token `<ws>/.orch/token`. Every request needs it except `GET /login` and `POST /hook/<id>`; `orch url` prints the login URL.
+- `term-ui/scrollback.ts` — terminal scrollback persisted in `<ws>/.orch/scrollback/<peer>.log`.
 - `term-ui/public/` — single-page UI (`index.html`, `i18n/*.json`), no build step.
 - `protocols/` — `ROOT-PROTOCOL.md` / `PEER-PROTOCOL.md`, passed with `--append-system-prompt` at every start.
 - `sandbox/` — test roots and children, each its own git repo.

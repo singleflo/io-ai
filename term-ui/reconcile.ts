@@ -59,14 +59,18 @@ async function pass() {
     const old = ctx.sessions.get(f.route) ?? [...ctx.sessions.values()].find(o => o.recipe?.sessionId && o.recipe.sessionId === f.recipe?.sessionId && !found.some(x => x.route === o.route));
     const s = old ?? newSession(f);
     const movedFrom = old && old.route !== f.route ? old.route : undefined;
-    Object.assign(s, f);
+    Object.assign(s, { linked: undefined, linkDir: undefined, recipeError: undefined }, f); // optional fields absent from the scan must not keep old values (a relocated session stops being linked)
     if (movedFrom && s.proc) {
       // folder moved by hand while running: stop, the next start relocates the omp file
       s.restarting = true;
       void terminateTree(s.proc.pid);
     }
-    if (f.recipeError) setIssue(s, "recipe-invalid", "flag", f.recipeError, []);
+    // a link whose target folder is gone is not an invalid recipe: the user relinks it or archives the link
+    const linkBroken = !!f.recipeError?.startsWith("link target missing");
+    if (f.recipeError && !linkBroken) setIssue(s, "recipe-invalid", "flag", f.recipeError, []);
     else clearIssue(s, "recipe-invalid");
+    if (linkBroken) setIssue(s, "link-broken", "ask", f.recipeError!, ["relink", "archive"]);
+    else clearIssue(s, "link-broken");
     next.set(f.route, s);
     const id = f.recipe?.sessionId;
     if (id) idRoutes.set(id, [...(idRoutes.get(id) ?? []), f.route]);

@@ -25,6 +25,9 @@ flowchart LR
 - **A session is a folder.** Anything under the workspace that contains `.orch/session.json` is a session; subfolders are its children (Next.js-style routing). The route is the path (`root-test/mail`), and the peer name follows (`root-test.mail`).
 - **Recipes, not flags to remember.** Model, thinking, model roles, compaction, MCP servers, skills: stored per session, applied with `omp -r <id>` at every start. Conversations survive every restart.
 - **Root/specialist split.** A root session gets the `ROOT-PROTOCOL` (it may spawn children only through `orch`, respecting quota) and root-only skills like `create-specialist-session`. Children answer with a strict 4-line REQ format.
+- **Automations.** Schedules (5-field cron, local time) and webhook triggers (`POST /hook/<id>`) live in the recipe and wake an agent with `[orch schedule]` / `[orch trigger]`; delivery waits until the session is idle.
+- **Role presets.** `presets/{coding,sales,support}`: a preset fills purpose, MCP servers, allowed built-in tools, environment (`inherit: minimal` + selected secrets), approval patterns and schedules, and replaces the AGENTS.md template.
+- **Deliverables.** Files an agent writes to `./outbox/` (and the newest files of its folder) are listed and opened from the UI.
 - **Deterministic drift handling.** `reconcile` runs every few seconds and converges: in-session `/model` and `/thinking` are adopted (with revert), global omp config changes flag `restart-needed`, never auto-restart, hand-moved folders are followed via omp's own `SessionManager.moveTo`, copies lose the session id, deleted folders become orphans you can forget or relink.
 - **Health without screen-scraping.** An omp extension reports hello/state/heartbeat; the server sees process exits. Crashes reach the root as `[orch]` notices with a bounded auto-restart policy; stuck sessions are detected by heartbeat.
 - **Operate-grade UI.** Live terminals with per-session model selector, working elapsed timers, issue cards with one-click actions, a two-step new-root wizard (mission, model, MCP servers, skills), graceful or forced stop of a whole subtree, archive instead of delete.
@@ -55,7 +58,7 @@ Optional: MCP servers you already have in `~/.omp/agent/mcp.json` (ms365, chrome
 git clone https://github.com/singleflo/io-ai.git && cd io-ai
 cd term-ui && bun install && cd ..
 bun term-ui/service.ts install  # user service on :8787, default workspace ~/orch (foreground alternative: bun term-ui/server.ts)
-open http://127.0.0.1:8787
+bun term-ui/orch.ts url         # prints http://127.0.0.1:8787/login?t=<token>: open it once; the page then keeps a cookie
 ```
 
 1. **New root** (sidebar) — a two-step wizard: name, mission, model, thinking; then MCP servers and skills (everything on by default; unchecking excludes a skill from that session only).
@@ -63,6 +66,8 @@ open http://127.0.0.1:8787
 3. Children appear as cards on the right: open one, watch its state and working timer, restart it with another model, or stop the whole subtree gracefully.
 
 Environment: `ORCH_HOME` (workspace root, default `~/orch`), `PORT` (default 8787), `--workspace <path>`.
+
+Access: the server creates `<workspace>/.orch/token` (mode 0600) and answers `401` to every request without it, except `GET /login` and `POST /hook/<id>`. `orch`, the sessions and `service.ts status` read it automatically. Work state (inbox, REQ register, usage, audit log) lives in `<workspace>/.orch/orch.db`.
 
 Run the server as a user service so it survives closing the terminal (launchd on macOS, systemd `--user` on Linux; PATH, `ORCH_HOME` and `PORT` of the installing shell are baked in):
 
@@ -79,6 +84,8 @@ bun term-ui/service.ts install      # also: uninstall | status
     known.json                 session ids seen (orphans list)
     skills/{common,root}/      your own skills, injected per role
     templates/{root,child}/    AGENTS.md templates (optional overrides)
+    secrets.json               secret values by name (mode 0600, never returned by the API)
+    presets/<role>/            role presets overriding the repo's presets/ (preset.json + AGENTS.md)
   root-test/                   a root session   → route "root-test"
     .orch/session.json         the recipe (id, model, mcp, skills, desired)
     AGENTS.md                  domain rules; inherited by children
@@ -107,6 +114,12 @@ bun term-ui/orch.ts folder /abs/path                       # project skills, pro
 bun term-ui/orch.ts spawn --name api --parent ops --purpose "…" --folder /abs/repo --session latest --skills a,b --start
 bun term-ui/orch.ts edit <route> --name new-name --mcp ms365 --skills all   # rename, then edit; takes effect after a restart
 bun term-ui/orch.ts archive-list · restore <archive id>
+bun term-ui/orch.ts spawn --name sales --parent ops --preset sales   # role preset: purpose, MCP, tools, env, approvals, schedules
+bun term-ui/orch.ts edit <route> --tools read,grep,write            # allowed built-in tools (all = no limit); restart applies it
+bun term-ui/orch.ts schedule add <route> "0 8 * * 1-5" "Morning review"   # cron, local time; list · rm <id>
+bun term-ui/orch.ts trigger add <route> new-lead "New lead: {{body}}"       # prints http://127.0.0.1:<port>/hook/<id>
+echo "$VALUE" | bun term-ui/orch.ts secret set DEMO_TOKEN                   # stored in .orch/secrets.json; select it per session (edit → Environment)
+bun term-ui/orch.ts relocate <route> /abs/new-folder [--new-conversation]   # or --workspace to move a linked session into the workspace
 ```
 
 Inside a root session the path is already known (`ORCH_ROUTE`), so `--parent` defaults to the root itself.
@@ -124,6 +137,7 @@ Inside a root session the path is already known (`ORCH_ROUTE`), so `--parent` de
 | `/move` inside a session | the session folder follows the conversation |
 | folder copied | the copy loses the id and starts a new conversation |
 | folder deleted | orphan listed: forget, or relink to a folder |
+| linked folder moved/deleted | `link-broken` card: relink to the new folder, or archive; `relocate` changes a session's folder (same conversation, or a new one) |
 | session opened elsewhere (`omp -r` in a terminal) | start refused (`open-elsewhere`), auto-starts when freed |
 | omp upgraded | catalog rebuilt; SDK version checked and flagged |
 

@@ -4,6 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { Recipe, Roles } from "./workspace";
 import { workspaceRoot } from "./workspace";
+import { SDK_BUN } from "./core";
 import { existsSync, readdirSync } from "node:fs";
 
 export type McpServer = { type?: string; command?: string; args?: string[]; url?: string; enabled?: boolean };
@@ -20,6 +21,7 @@ export type Catalog = {
   workspaceSkills: { name: string; role: string }[] | null;
   usage: { anthropic7dUsedFraction: number | null } | null;
   hashes: { config: string | null; mcp: string | null };
+  builtinTools: string[]; // built-in omp tool names (the `tools` allowlist is chosen among them)
   missing: string[]; // commands that failed
 };
 
@@ -55,13 +57,14 @@ export function fileHashes(agentDir: string | null): Catalog["hashes"] {
 }
 
 export async function buildCatalog(): Promise<Catalog> {
-  const [version, agentDirRaw, config, models, usage, skills] = await Promise.all([
+  const [version, agentDirRaw, config, models, usage, skills, builtin] = await Promise.all([
     ompVersion(),
     run(["omp", "config", "path"]),
     run(["omp", "config", "list", "--json"]),
     run(["omp", "models", "--json"]),
     run(["omp", "usage", "--json"]),
     run(["omp", "skill", "list", "--json"]),
+    run([SDK_BUN, join(import.meta.dir, "omp-sdk.ts"), "tools"]),
   ]);
   const agentDir = agentDirRaw?.trim() || null;
   const missing: string[] = [];
@@ -71,6 +74,7 @@ export async function buildCatalog(): Promise<Catalog> {
   const mod = need("models", json<{ models: { selector: string }[] }>(models));
   const use = need("usage", json<{ reports: { provider: string; limits: { id: string; amount?: { usedFraction?: number } }[] }[] }>(usage));
   const sk = need("skill list", json<{ skills: { name: string; filePath: string }[] }>(skills));
+  const tools = need("builtin tools", json<{ tools: string[] }>(builtin));
 
   let mcpServers: Catalog["mcpServers"] = null;
   if (agentDir && existsSync(join(agentDir, "mcp.json"))) {
@@ -96,6 +100,7 @@ export async function buildCatalog(): Promise<Catalog> {
     workspaceSkills: workspaceSkills(),
     usage: use ? { anthropic7dUsedFraction: anthropic7d } : null,
     hashes: fileHashes(agentDir),
+    builtinTools: tools ? tools.tools : [],
     missing,
   };
 }

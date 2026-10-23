@@ -1,0 +1,16 @@
+{
+  "label": "Support",
+  "kind": "child",
+  "purpose": "Support assistant: triage incoming requests by SLA and prepare replies. Propose; never send anything to a customer without approval.",
+  "mcp": ["odoo-assistant", "ms365"],
+  "skills": null,
+  "tools": ["read", "grep", "glob", "find", "write", "edit", "todo", "web_search", "ask"],
+  "env": { "inherit": "minimal", "secrets": [] },
+  "approve": ["mcp__*send*", "mcp__*create*", "mcp__*write*", "mcp__*notify*"],
+  "schedules": [
+    {
+      "cron": "*/30 8-18 * * 1-5",
+      "text": "Check new support requests (mail and Odoo helpdesk/chatter). Triage each: reply draft, escalation, or ticket update. Anything customer-facing goes through approval."
+    }
+  ]
+}

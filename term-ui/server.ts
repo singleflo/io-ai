@@ -5,12 +5,21 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync,
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { recipeDefaults } from "./catalog";
 import {
-  IO, PORT, bucketSessions, broadcast, clearIssue, ctx, heartbeatCheck, heldLeases, hooks, newSession, notifyParent, onHello, resolveIssue, restartSession, saveRecipe, sendTask, startSession, stopSession, type Session, type State,
+  IO, PORT, bucketSessions, broadcast, clearIssue, ctx, flushScrollback, heartbeatCheck, heldLeases, hooks, isAwaiting, newSession, notifyParent, onHello, resolveIssue, restartSession, saveRecipe, sendTask, startSession, stopSession, type Session, type State,
 } from "./core";
-import { FolderError, folderInfo, listDirs } from "./folder";
+import { FolderError, folderInfo, listDirs, makeDir } from "./folder";
 import { assertPtySupported, terminateTree } from "./pty";
 import { orphans, reconcile, refreshCatalog } from "./reconcile";
+import { ensureToken, cookieValue, tokenMatches } from "./token";
+import { inboxCounts, inboxDecide, inboxList, onInboxChange, openStore, type InboxItem } from "./store";
+import { auditRequest, coreRoute, digestTick } from "./core-api";
+import { renameScrollback } from "./scrollback";
 import { NAME_RE, newRecipe, orchDir, peerOf, scanWorkspace, writeRecipe, type Recipe } from "./workspace";
+import { checkRecipeExtras, handleHook, normalizeRecipeExtras, startAutomation } from "./automation";
+import { listPresets, loadPreset, presetFields } from "./presets";
+import { relocate } from "./relocate";
+import { listFiles, serveFile } from "./files";
+import { handleSecrets } from "./secrets";
 
 assertPtySupported();
 mkdirSync(orchDir(ctx.ws), { recursive: true });
@@ -18,17 +27,21 @@ hooks.reconcile = () => void reconcile();
 try {
   ctx.sdkVersion = (JSON.parse(readFileSync(join(import.meta.dir, "node_modules", "@oh-my-pi", "pi-coding-agent", "package.json"), "utf8")) as { version: string }).version;
 } catch {}
+openStore();
+// The agent waiting for an open approval or `orch_ask_user` question died with the previous server run.
+for (const item of inboxList("open", 10_000)) if (item.kind === "approval" || (item.kind === "question" && !item.data.child)) inboxDecide(item.id, "dismissed");
+const TOKEN = ensureToken(ctx.ws);
 
-const RECIPE_KEYS = ["model", "thinking", "roles", "compactPercent", "mcp", "skills", "tools"] as const;
+const RECIPE_KEYS = ["model", "thinking", "roles", "compactPercent", "mcp", "skills", "tools", "approve", "schedules", "triggers", "env"] as const;
 const json = (v: unknown, status = 200) => Response.json(v, { status });
 const bad = (text: string, status = 400) => new Response(text, { status });
 
 const view = (s: Session) => ({
-  route: s.route, name: s.name, peer: peerOf(s.route), kind: s.kind, parent: s.parent, depth: s.depth, folder: s.folder,
+  route: s.route, name: s.name, peer: peerOf(s.route), kind: s.kind, parent: s.parent, depth: s.depth, folder: s.folder, linked: !!s.linked,
   ...(s.recipe ?? {}),
   desired: s.recipe?.desired ?? "stopped",
   running: !!s.proc, state: s.state, hung: !!s.hung, exit: s.exit, pid: s.pid, realModel: s.realModel, lastActivity: s.lastActivity, workingSince: s.workingSince,
-  issues: [...s.issues.values()], recipeError: s.recipeError,
+  issues: [...s.issues.values()], recipeError: s.recipeError, awaiting: isAwaiting(s.route),
 });
 const views = () => [...ctx.sessions.values()].map(view);
 const globalIssues = () => [...ctx.globalIssues.values()];
@@ -52,6 +65,27 @@ setInterval(() => {
 setInterval(() => push("event: ping\ndata: 1\n\n"), 10_000);
 setInterval(heartbeatCheck, 10_000);
 setInterval(() => void reconcile(), 5_000);
+startAutomation();
+setInterval(() => digestTick(), 30_000);
+setInterval(() => ctx.sessions.forEach(flushScrollback), 10_000);
+for (const sig of ["SIGINT", "SIGTERM"] as const)
+  process.on(sig, () => {
+    ctx.sessions.forEach(flushScrollback);
+    process.exit(0);
+  });
+
+// Inbox changes: SSE `inbox` event for open pages, a macOS notification when no page is open.
+const inboxPayload = () => JSON.stringify({ ...inboxCounts(), latest: inboxList("all", 1)[0] ?? null });
+const MAC_KINDS = new Set<InboxItem["kind"]>(["approval", "question", "blocked", "mcp"]);
+onInboxChange((item, change) => {
+  push(`event: inbox\ndata: ${inboxPayload()}\n\n`);
+  if (change !== "add" || process.platform !== "darwin" || listeners.size > 0 || !MAC_KINDS.has(item.kind)) return;
+  const script = ["on run argv", 'display notification (item 1 of argv) with title "io-ai" subtitle (item 2 of argv)', "end run"];
+  const mac = Bun.spawn(["osascript", ...script.flatMap(l => ["-e", l]), (item.body || item.title).slice(0, 200), item.route], { stdout: "ignore", stderr: "pipe" });
+  void mac.exited.then(async code => {
+    if (code !== 0) console.error(`osascript failed (${code}): ${await new Response(mac.stderr).text()}`);
+  });
+});
 
 // ---------- models cache ----------
 async function cli(args: string[]): Promise<string> {
@@ -72,7 +106,7 @@ function validModel(m: string | undefined): boolean {
   return !m || !models || models.includes(m.split(":")[0]);
 }
 
-type CreateBody = Partial<Recipe> & { parent?: string | null; name?: string; start?: boolean; folder?: string };
+type CreateBody = Partial<Recipe> & { parent?: string | null; name?: string; start?: boolean; folder?: string; preset?: string };
 
 async function createSession(b: CreateBody): Promise<Response> {
   if (!b.name || !NAME_RE.test(b.name)) return bad("invalid name (a-z, 0-9, -; 2-32 chars)");
@@ -103,26 +137,34 @@ async function createSession(b: CreateBody): Promise<Response> {
   }
   const linkDir = join(parentFolder, b.name);
   if (existsSync(linkDir)) return bad("folder already exists");
-  if (!validModel(b.model)) return bad("unknown model");
+  const extrasError = checkRecipeExtras(b);
+  if (extrasError) return bad(extrasError);
+  const loaded = b.preset ? loadPreset(b.preset) : undefined;
+  if (b.preset && !loaded) return bad("unknown preset");
+  const filled = loaded ? presetFields(loaded.preset, ctx.catalog?.mcpServers ? Object.keys(ctx.catalog.mcpServers) : null) : undefined;
   const kind = b.parent ? "child" : "root";
   const defaults = ctx.catalog ? recipeDefaults(ctx.catalog, kind) : {};
+  // precedence: catalog defaults < preset < what the body set
   const recipe = newRecipe({
     ...defaults,
+    ...filled?.fields,
     ...Object.fromEntries(RECIPE_KEYS.filter(k => b[k] !== undefined).map(k => [k, b[k]])),
-    purpose: b.purpose,
+    purpose: b.purpose ?? filled?.fields.purpose,
     createdBy: b.createdBy ?? "cli",
     desired: b.start ? "running" : "stopped",
     sessionId,
   });
+  if (!validModel(recipe.model)) return bad("unknown model");
+  normalizeRecipeExtras(recipe);
   const folder = external ?? linkDir;
   mkdirSync(join(linkDir, ".orch"), { recursive: true }); // for links the recipe lives in the external folder
   if (external) writeFileSync(join(linkDir, ".orch", "link.json"), `${JSON.stringify({ target: resolve(external) }, null, 2)}\n`);
   writeRecipe(folder, recipe);
-  const tpl = templateFor(kind);
-  if (tpl && !existsSync(join(folder, "AGENTS.md"))) writeFileSync(join(folder, "AGENTS.md"), tpl.replaceAll("{{name}}", b.name).replaceAll("{{purpose}}", b.purpose ?? ""));
+  const tpl = loaded?.agents ?? templateFor(kind);
+  if (tpl && !existsSync(join(folder, "AGENTS.md"))) writeFileSync(join(folder, "AGENTS.md"), tpl.replaceAll("{{name}}", b.name).replaceAll("{{purpose}}", recipe.purpose ?? ""));
   await reconcile();
   const s = [...ctx.sessions.values()].find(x => x.folder === folder);
-  return s ? json(view(s)) : bad("session not found after creation", 500);
+  return s ? json({ ...view(s), ...(filled?.warnings.length ? { warnings: filled.warnings } : {}) }) : bad("session not found after creation", 500);
 }
 
 function adopt(folder: string, sessionId: string | undefined): Response {
@@ -167,6 +209,10 @@ async function moveSubtree(s: Session, to: string): Promise<Response> {
   const target = join(ctx.ws, to);
   if (existsSync(target) || !existsSync(dirname(target))) return bad("target exists or its parent folder is missing");
   const prev = await parkSubtree(subtree);
+  for (const x of subtree) {
+    flushScrollback(x);
+    renameScrollback(ctx.ws, x.route, to + x.route.slice(s.route.length));
+  }
   renameSync(ownDir(s), target);
   // desired states come back from the recipe files on rescan (parking only changed memory)
   await reconcile();
@@ -246,8 +292,27 @@ Bun.serve<{ route: string }, {}>({
   async fetch(req, server) {
     const url = new URL(req.url);
     const parts = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+    // Auth: every request needs the token except the login page and the webhooks (reachable only from this machine).
+    if (req.method === "GET" && url.pathname === "/login") {
+      if (!tokenMatches(url.searchParams.get("t"), TOKEN)) return bad("unauthorized", 401);
+      return new Response(null, { status: 302, headers: { location: "/", "set-cookie": `orch_token=${TOKEN}; HttpOnly; SameSite=Strict; Path=/` } });
+    }
+    if (!(req.method === "POST" && parts[0] === "hook" && parts.length === 2)) {
+      const bearer = /^Bearer\s+(.+)$/i.exec(req.headers.get("authorization") ?? "")?.[1];
+      const queryToken = parts[0] === "pty" ? url.searchParams.get("t") : null;
+      if (!tokenMatches(bearer ?? cookieValue(req.headers.get("cookie"), "orch_token") ?? queryToken, TOKEN)) return bad("unauthorized", 401);
+      // SameSite=Strict ignores the port, so another local site could ride the cookie: a browser request
+      // (it always sends Origin on POST and on WebSocket upgrades) must come from this server's own origin.
+      const origin = req.headers.get("origin");
+      if (!bearer && origin && URL.canParse(origin) !== true) return bad("cross-origin request refused", 403); // "null" origin
+      if (!bearer && origin && URL.canParse(origin) && new URL(origin).host !== url.host) return bad("cross-origin request refused", 403);
+    }
     if (parts[0] === "pty" && parts[1]) return server.upgrade(req, { data: { route: parts[1] } }) ? undefined : bad("upgrade failed");
+    if (parts[0] === "hook" && parts.length === 2) return handleHook(req, parts[1]);
     if (parts[0] === "api") {
+      void auditRequest(req.clone(), parts);
+      const handled = await coreRoute(req, url, parts);
+      if (handled) return handled;
       switch (parts[1]) {
         case "events": {
           let ctl: ReadableStreamDefaultController<string>;
@@ -256,6 +321,7 @@ Bun.serve<{ route: string }, {}>({
               ctl = c;
               listeners.add(c);
               c.enqueue(`data: ${JSON.stringify(views())}\n\n`);
+              c.enqueue(`event: inbox\ndata: ${inboxPayload()}\n\n`);
             },
             cancel() {
               listeners.delete(ctl);
@@ -296,10 +362,18 @@ Bun.serve<{ route: string }, {}>({
         }
         case "fs":
           try {
-            return json(listDirs(url.searchParams.get("dir")));
+            if (parts[2] === "mkdir" && req.method === "POST") {
+              const mk = (await req.json().catch(() => ({}))) as { dir?: string; name?: string; hidden?: boolean };
+              return json(makeDir(String(mk.dir ?? ""), String(mk.name ?? ""), mk.hidden === true));
+            }
+            return json(listDirs(url.searchParams.get("dir"), url.searchParams.get("hidden") === "1"));
           } catch (e) {
-            return e instanceof FolderError ? bad(e.message) : bad((e as Error).message, 500);
+            return e instanceof FolderError ? bad(e.message, e.status) : bad((e as Error).message, 500);
           }
+        case "secrets":
+          return handleSecrets(req, parts.slice(2));
+        case "presets":
+          return json(listPresets());
         case "folder-info":
           try {
             return json(await folderInfo(url.searchParams.get("folder") ?? "", url.searchParams.get("route")));
@@ -333,7 +407,12 @@ Bun.serve<{ route: string }, {}>({
       const r = s.recipe;
       switch (action) {
         case "restart":
-          if (r) for (const k of RECIPE_KEYS) if (k in body) (r as Record<string, unknown>)[k] = body[k] || undefined;
+          if (r) {
+            const extrasError = checkRecipeExtras(body);
+            if (extrasError) return bad(extrasError);
+            for (const k of RECIPE_KEYS) if (k in body) (r as Record<string, unknown>)[k] = body[k] || undefined;
+            normalizeRecipeExtras(r);
+          }
           if (r && !validModel(r.model)) return bad("unknown model");
           restartSession(s);
           return json(view(s));
@@ -382,6 +461,8 @@ Bun.serve<{ route: string }, {}>({
           return moveSubtree(s, String(body.to ?? ""));
         case "edit": {
           if (!r) return bad("recipe invalid");
+          const extrasError = checkRecipeExtras(body);
+          if (extrasError) return bad(extrasError);
           for (const k of RECIPE_KEYS) {
             if (!(k in body)) continue;
             // `skills: null` (no filter) and `roles: null` are real values; for the others null means "unset"
@@ -389,6 +470,7 @@ Bun.serve<{ route: string }, {}>({
             (r as Record<string, unknown>)[k] = v && typeof v === "object" && !Array.isArray(v) && !Object.keys(v).length ? null : v;
           }
           if (typeof body.purpose === "string") r.purpose = body.purpose;
+          normalizeRecipeExtras(r);
           if (!validModel(r.model)) return bad("unknown model");
           saveRecipe(s);
           if (body.restart === true && s.proc) restartSession(s);
@@ -402,6 +484,12 @@ Bun.serve<{ route: string }, {}>({
           return stopSubtree(s, "graceful");
         case "kill-subtree":
           return stopSubtree(s, "kill");
+        case "files":
+          return json(listFiles(s));
+        case "file":
+          return serveFile(s, url.searchParams.get("path"));
+        case "relocate":
+          return relocate(s, body, { park: parkSubtree, subtreeOf, reconcile });
       }
       return bad("unknown action", 404);
     }
@@ -434,4 +522,4 @@ await reconcile();
 void broadcast;
 void clearIssue;
 void newSession;
-console.log(`term-ui listening on http://127.0.0.1:${PORT} (workspace ${ctx.ws})`);
+console.log(`term-ui listening on http://127.0.0.1:${PORT}/login?t=${TOKEN} (workspace ${ctx.ws})`);

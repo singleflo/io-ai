@@ -3,6 +3,7 @@
 // Prints exactly one JSON line. Exit codes: 0 ok, 1 error, 3 refused / busy.
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import { tryAcquireSessionLease } from "@oh-my-pi/pi-coding-agent/session/session-storage";
+import { BUILTIN_TOOL_NAMES } from "@oh-my-pi/pi-coding-agent/tools/builtin-names";
 
 const [cmd, ...args] = process.argv.slice(2);
 const out = (value: unknown, code = 0): never => {
@@ -38,12 +39,15 @@ try {
       out(result);
       break;
     }
+    case "tools":
+      out({ tools: [...BUILTIN_TOOL_NAMES] });
+      break;
     case "bucket":
       // Session directory omp uses for a cwd. SessionManager.list returns [] outside omp's own runtime, so the caller lists files.
       out({ dir: SessionManager.getDefaultSessionDir(args[0]) });
       break;
     default:
-      out({ error: "usage: omp-sdk lease <id> | leases <id…> | relocate <file> <recordedCwd> <newCwd> | bucket <cwd>" }, 1);
+      out({ error: "usage: omp-sdk lease <id> | leases <id…> | relocate <file> <recordedCwd> <newCwd> | bucket <cwd> | tools" }, 1);
   }
 } catch (e) {
   const err = e as Error;

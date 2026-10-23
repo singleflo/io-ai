@@ -1,11 +1,15 @@
 // Folder inspection for the wizard: server-side directory picker and "what does this folder already hold".
-import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { bucketSessions, ctx, heldLeases } from "./core";
 import { linkFile, sessionFile } from "./workspace";
 
-export class FolderError extends Error {}
+export class FolderError extends Error {
+  constructor(message: string, readonly status = 400) {
+    super(message);
+  }
+}
 
 const isDir = (p: string) => {
   try {
@@ -23,17 +27,30 @@ function requireDir(dir: string): string {
 // ---------- GET /api/fs ----------
 export type FsEntry = { name: string; path: string; isSession: boolean; isGit: boolean };
 
-export function listDirs(dirParam: string | null): { dir: string; parent: string | null; entries: FsEntry[] } {
+export function listDirs(dirParam: string | null, hidden = false): { dir: string; parent: string | null; entries: FsEntry[] } {
   const dir = requireDir(dirParam || homedir());
   const entries: FsEntry[] = [];
   for (const e of readdirSync(dir, { withFileTypes: true })) {
-    if (e.name.startsWith(".")) continue;
+    if (!hidden && e.name.startsWith(".")) continue;
     const path = join(dir, e.name);
     if (!(e.isDirectory() || (e.isSymbolicLink() && isDir(path)))) continue;
     entries.push({ name: e.name, path, isSession: existsSync(sessionFile(path)) || existsSync(linkFile(path)), isGit: existsSync(join(path, ".git")) });
   }
   entries.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
   return { dir, parent: dirname(dir) === dir ? null : dirname(dir), entries };
+}
+
+// ---------- POST /api/fs/mkdir ----------
+const FOLDER_NAME_RE = /^[^/\\\0]{1,255}$/;
+
+// Creates `<dir>/<name>` and returns the listing of `dir`.
+export function makeDir(dirParam: string, name: string, hidden = false) {
+  const dir = requireDir(dirParam);
+  if (!FOLDER_NAME_RE.test(name) || name === "." || name === "..") throw new FolderError("invalid folder name");
+  const target = join(dir, name);
+  if (existsSync(target)) throw new FolderError("folder already exists", 409);
+  mkdirSync(target);
+  return listDirs(dir, hidden);
 }
 
 // ---------- conversations ----------
