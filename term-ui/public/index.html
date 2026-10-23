@@ -1624,6 +1624,18 @@ async function refreshAux() {
       await refreshAux();
     };
     actions.appendChild(button);
+    const purge = document.createElement("button");
+    purge.className = "btn ghost";
+    purge.innerHTML = ic("trash");
+    purge.title = t("archive.purge");
+    purge.setAttribute("aria-label", t("archive.purge"));
+    purge.onclick = async () => {
+      if (!confirm(t("archive.purgeConfirm", { route: item.route }))) return;
+      const response = await api(`/api/archive/${enc(item.id)}/purge`, {});
+      if (!response.ok) return alert(await response.text());
+      await refreshAux();
+    };
+    actions.appendChild(purge);
     row.append(label, when, actions);
     $("archivedlist").appendChild(row);
   }

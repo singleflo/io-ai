@@ -320,5 +320,7 @@
   "secrets.delete": "Delete",
   "secrets.confirmDelete": "Delete secret {name}?",
   "archive.title": "Archive",
-  "archive.restore": "Restore"
+  "archive.restore": "Restore",
+  "archive.purge": "Delete permanently",
+  "archive.purgeConfirm": "Permanently delete the archived session \"{route}\" and every file in its folder? This cannot be undone. Conversations stay in omp and a linked project folder is not touched."
 }

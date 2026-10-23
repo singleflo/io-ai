@@ -320,5 +320,7 @@
   "secrets.delete": "Elimina",
   "secrets.confirmDelete": "Eliminare il segreto {name}?",
   "archive.title": "Archivio",
-  "archive.restore": "Ripristina"
+  "archive.restore": "Ripristina",
+  "archive.purge": "Elimina definitivamente",
+  "archive.purgeConfirm": "Eliminare definitivamente la sessione archiviata \"{route}\" e tutti i file della sua cartella? Non si può annullare. Le conversazioni restano in omp e la cartella di un progetto collegato non viene toccata."
 }

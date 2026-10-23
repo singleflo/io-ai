@@ -1,7 +1,7 @@
 // term-ui: browser page with live agent terminals (xterm.js) backed by PTYs.
 // The server owns every agent process. Sessions are folders in the workspace (`.orch/session.json`);
 // `reconcile` keeps the running world and the folders in agreement.
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { recipeDefaults } from "./catalog";
 import {
@@ -284,6 +284,14 @@ async function restoreArchive(id: string): Promise<Response> {
   return json({ ok: true, route: entry.route });
 }
 
+// Permanently removes an archived entry. A linked session archives only its link folder, so the project it pointed to is never touched.
+function purgeArchive(id: string): Response {
+  const entry = listArchive().find(a => a.id === id);
+  if (!entry) return bad("unknown archive entry", 404);
+  rmSync(join(ctx.ws, "_archive", entry.id), { recursive: true, force: true });
+  return json({ ok: true });
+}
+
 // ---------- HTTP ----------
 Bun.serve<{ route: string }, {}>({
   idleTimeout: 0, // SSE and PTY sockets stay open indefinitely
@@ -383,6 +391,7 @@ Bun.serve<{ route: string }, {}>({
         case "archive": {
           if (!parts[2]) return json(listArchive());
           if (parts[3] === "restore" && req.method === "POST") return restoreArchive(parts[2]);
+          if (parts[3] === "purge" && req.method === "POST") return purgeArchive(parts[2]);
           return bad("unknown action", 404);
         }
         case "adopt": {
