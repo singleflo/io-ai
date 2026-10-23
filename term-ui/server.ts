@@ -1,12 +1,13 @@
 // term-ui: browser page with live agent terminals (xterm.js) backed by PTYs.
 // The server owns every agent process. Sessions are folders in the workspace (`.orch/session.json`);
 // `reconcile` keeps the running world and the folders in agreement.
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { recipeDefaults } from "./catalog";
 import {
-  IO, PORT, bucketSessions, broadcast, clearIssue, ctx, heartbeatCheck, hooks, newSession, notifyParent, onHello, resolveIssue, restartSession, saveRecipe, sendTask, startSession, stopSession, type Session, type State,
+  IO, PORT, bucketSessions, broadcast, clearIssue, ctx, heartbeatCheck, heldLeases, hooks, newSession, notifyParent, onHello, resolveIssue, restartSession, saveRecipe, sendTask, startSession, stopSession, type Session, type State,
 } from "./core";
+import { FolderError, folderInfo, listDirs } from "./folder";
 import { assertPtySupported, terminateTree } from "./pty";
 import { orphans, reconcile, refreshCatalog } from "./reconcile";
 import { NAME_RE, newRecipe, orchDir, peerOf, scanWorkspace, writeRecipe, type Recipe } from "./workspace";
@@ -71,7 +72,9 @@ function validModel(m: string | undefined): boolean {
   return !m || !models || models.includes(m.split(":")[0]);
 }
 
-async function createSession(b: Partial<Recipe> & { parent?: string | null; name?: string; start?: boolean; folder?: string }): Promise<Response> {
+type CreateBody = Partial<Recipe> & { parent?: string | null; name?: string; start?: boolean; folder?: string };
+
+async function createSession(b: CreateBody): Promise<Response> {
   if (!b.name || !NAME_RE.test(b.name)) return bad("invalid name (a-z, 0-9, -; 2-32 chars)");
   let parentFolder = ctx.ws;
   if (b.parent) {
@@ -86,6 +89,18 @@ async function createSession(b: Partial<Recipe> & { parent?: string | null; name
     if (!(rel.startsWith("..") || isAbsolute(rel))) return bad("folder inside the workspace does not need a link");
     if (existsSync(join(external, ".orch", "session.json"))) return bad("folder is already a session");
   }
+  // `sessionId`: a conversation of the linked folder ("latest" = newest); null/absent = a new conversation
+  let sessionId: string | null = null;
+  if (b.sessionId) {
+    if (!external) return bad("sessionId needs a folder");
+    const files = await bucketSessions(external);
+    const id = b.sessionId === "latest" ? files[0]?.id : b.sessionId;
+    if (!id || !files.some(f => f.id === id)) return bad("session id not found in that folder");
+    if ((await heldLeases([id]))[id]) return bad("conversation is open in another omp process", 409);
+    const owner = [...ctx.sessions.values()].find(x => x.recipe?.sessionId === id);
+    if (owner) return bad(`conversation already belongs to ${owner.route}`, 409);
+    sessionId = id;
+  }
   const linkDir = join(parentFolder, b.name);
   if (existsSync(linkDir)) return bad("folder already exists");
   if (!validModel(b.model)) return bad("unknown model");
@@ -97,6 +112,7 @@ async function createSession(b: Partial<Recipe> & { parent?: string | null; name
     purpose: b.purpose,
     createdBy: b.createdBy ?? "cli",
     desired: b.start ? "running" : "stopped",
+    sessionId,
   });
   const folder = external ?? linkDir;
   mkdirSync(join(linkDir, ".orch"), { recursive: true }); // for links the recipe lives in the external folder
@@ -144,6 +160,8 @@ async function parkSubtree(subtree: Session[]): Promise<Map<Session, Recipe["des
 
 async function moveSubtree(s: Session, to: string): Promise<Response> {
   const ownDir = (x: Session) => x.linkDir ?? x.folder; // a linked session moves its link, not the external folder
+  const segments = to.split("/");
+  if (segments.some(seg => !seg || seg === "." || seg === "..") || !NAME_RE.test(segments[segments.length - 1])) return bad("invalid name (a-z, 0-9, -; 2-32 chars)");
   const subtree = subtreeOf(s);
   if (subtree.some(x => x.state === "working" && x.proc)) return bad("busy: a session in the subtree is working", 409);
   const target = join(ctx.ws, to);
@@ -191,6 +209,33 @@ async function archiveSubtree(s: Session, force: boolean): Promise<Response> {
   writeFileSync(join(orchDir(ctx.ws), "known.json"), `${JSON.stringify(ctx.known, null, 2)}\n`);
   await reconcile();
   return json({ ok: true, archivedTo: target });
+}
+
+// `<route with / as __>-YYYYMMDD-HHMMSS` (UTC stamp written by archiveSubtree)
+const ARCHIVE_RE = /^(.+)-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/;
+
+function listArchive(): { id: string; route: string; archivedAt: string }[] {
+  const dir = join(ctx.ws, "_archive");
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir, { withFileTypes: true })
+    .filter(e => e.isDirectory())
+    .flatMap(e => {
+      const m = ARCHIVE_RE.exec(e.name);
+      return m ? [{ id: e.name, route: m[1].replaceAll("__", "/"), archivedAt: `${m[2]}-${m[3]}-${m[4]}T${m[5]}:${m[6]}:${m[7]}Z` }] : [];
+    })
+    .sort((a, b) => b.archivedAt.localeCompare(a.archivedAt));
+}
+
+// Moves an archived subtree back to its route. The sessions keep `desired: stopped`.
+async function restoreArchive(id: string): Promise<Response> {
+  const entry = listArchive().find(a => a.id === id);
+  if (!entry) return bad("unknown archive entry", 404);
+  const target = join(ctx.ws, entry.route);
+  if (existsSync(target)) return bad("route already exists", 409);
+  if (!existsSync(dirname(target))) return bad("parent missing");
+  renameSync(join(ctx.ws, "_archive", id), target);
+  await reconcile();
+  return json({ ok: true, route: entry.route });
 }
 
 // ---------- HTTP ----------
@@ -249,49 +294,22 @@ Bun.serve<{ route: string }, {}>({
           }
           return bad("unknown action", 404);
         }
-        case "attach": {
-          if (req.method === "GET") {
-            const folder = url.searchParams.get("folder") ?? "";
-            if (!isAbsolute(folder) || !existsSync(folder) || !statSync(folder).isDirectory()) return bad("folder must be an existing absolute path");
-            const sessions = (await bucketSessions(folder)).map(f => {
-              let title: string | undefined;
-              try {
-                for (const line of readFileSync(f.path, "utf8").slice(0, 4096).split("\n")) {
-                  const e = JSON.parse(line) as { type?: string; title?: string };
-                  if (e.type === "title" && e.title) {
-                    title = e.title;
-                    break;
-                  }
-                }
-              } catch {}
-              return { id: f.id, title, modified: statSync(f.path).mtime.toISOString() };
-            });
-            return json({ sessions });
+        case "fs":
+          try {
+            return json(listDirs(url.searchParams.get("dir")));
+          } catch (e) {
+            return e instanceof FolderError ? bad(e.message) : bad((e as Error).message, 500);
           }
-          const body = (await req.json().catch(() => ({}))) as { parent?: string; folder?: string; name?: string; sessionId?: string; start?: boolean; model?: string };
-          const folder = String(body.folder ?? "");
-          if (!isAbsolute(folder) || !existsSync(folder) || !statSync(folder).isDirectory()) return bad("folder must be an existing absolute path");
-          if (existsSync(join(folder, ".orch", "session.json"))) return bad("folder is already a session");
-          const parentRoute = body.parent ?? null;
-          const parentFolder = parentRoute ? ctx.sessions.get(parentRoute)?.folder : ctx.ws;
-          if (parentRoute && !parentFolder) return bad("unknown parent");
-          const name = body.name ?? folder.split("/").filter(Boolean).pop() ?? "";
-          if (!NAME_RE.test(name)) return bad("invalid name (a-z, 0-9, -; 2-32 chars): pass an explicit --name");
-          const linkDir = join(parentFolder ?? ctx.ws, name);
-          if (existsSync(linkDir)) return bad("folder already exists");
-          const files = await bucketSessions(folder);
-          let sessionId = body.sessionId ?? undefined;
-          if (sessionId === "latest") sessionId = files[0]?.id;
-          if (sessionId && !files.some(f => f.id === sessionId)) return bad("session id not found in that folder");
-          const kind = parentRoute ? "child" : "root";
-          const defaults = ctx.catalog ? recipeDefaults(ctx.catalog, kind) : {};
-          const recipe = newRecipe({ ...defaults, ...(body.model ? { model: body.model } : {}), sessionId: sessionId ?? null, desired: body.start ? "running" : "stopped", createdBy: "attach" });
-          mkdirSync(join(linkDir, ".orch"), { recursive: true });
-          writeFileSync(join(linkDir, ".orch", "link.json"), `${JSON.stringify({ target: resolve(folder) }, null, 2)}\n`);
-          writeRecipe(folder, recipe);
-          await reconcile();
-          const s = [...ctx.sessions.values()].find(x => x.folder === folder);
-          return json(s ? view(s) : bad("session not found after attach", 500));
+        case "folder-info":
+          try {
+            return json(await folderInfo(url.searchParams.get("folder") ?? "", url.searchParams.get("route")));
+          } catch (e) {
+            return e instanceof FolderError ? bad(e.message) : bad((e as Error).message, 500);
+          }
+        case "archive": {
+          if (!parts[2]) return json(listArchive());
+          if (parts[3] === "restore" && req.method === "POST") return restoreArchive(parts[2]);
+          return bad("unknown action", 404);
         }
         case "adopt": {
           const body = (await req.json().catch(() => ({}))) as { folder?: string; sessionId?: string };
@@ -364,7 +382,12 @@ Bun.serve<{ route: string }, {}>({
           return moveSubtree(s, String(body.to ?? ""));
         case "edit": {
           if (!r) return bad("recipe invalid");
-          for (const k of RECIPE_KEYS) if (k in body) (r as Record<string, unknown>)[k] = body[k] ?? undefined;
+          for (const k of RECIPE_KEYS) {
+            if (!(k in body)) continue;
+            // `skills: null` (no filter) and `roles: null` are real values; for the others null means "unset"
+            const v = k === "skills" || k === "roles" ? body[k] : body[k] ?? undefined;
+            (r as Record<string, unknown>)[k] = v && typeof v === "object" && !Array.isArray(v) && !Object.keys(v).length ? null : v;
+          }
           if (typeof body.purpose === "string") r.purpose = body.purpose;
           if (!validModel(r.model)) return bad("unknown model");
           saveRecipe(s);

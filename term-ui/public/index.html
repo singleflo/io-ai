@@ -110,9 +110,9 @@
   .newform .btn { justify-content: center; }
   .formerr { font-size: 12px; color: var(--bad); }
   .connstate { margin-top: auto; display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
-  #orphans { padding: 12px 8px; border-top: 1px solid var(--line); overflow-y: auto; }
-  #orphans[hidden] { display: none; }
-  #orphans .section-title { padding-left: 8px; }
+  #orphans, #archived { flex: none; max-height: 26vh; padding: 12px 8px; border-top: 1px solid var(--line); overflow-y: auto; }
+  #orphans[hidden], #archived[hidden] { display: none; }
+  #orphans .section-title, #archived .section-title { padding-left: 8px; }
   .orphan { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px; border-radius: var(--radius-sm); color: var(--fg-2); font-size: 12px; }
   .orphan .mono { min-width: 0; max-width: 100%; }
   .orphan .btn { height: 26px; }
@@ -198,7 +198,9 @@
   dialog form { display: flex; flex-direction: column; gap: 10px; }
   dialog label { font-size: 12px; color: var(--muted); }
   dialog select { width: 100%; }
-  dialog .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+  dialog[open] { display: flex; flex-direction: column; max-height: calc(100vh - 32px); }
+  dialog form { min-height: 0; flex: 1; }
+  .wiz-body { flex: 1; min-height: 0; overflow-y: auto; padding-right: 6px; margin-right: -6px; }
 
   dialog { width: min(600px, calc(100vw - 32px)); }
   textarea { width: 100%; min-height: 84px; resize: vertical; padding: 8px 10px; font: inherit; font-size: 13px; line-height: 1.5; color: var(--fg); background: var(--s2); border: 1px solid var(--line); border-radius: var(--radius-sm); }
@@ -213,7 +215,8 @@
   .wiz-wide { grid-column: 1 / -1; }
   .wiz-field { display: flex; flex-direction: column; gap: 5px; }
   .wiz-hint { margin: 0 0 12px; font-size: 12px; color: var(--muted); line-height: 1.5; }
-  .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; max-height: 44vh; overflow-y: auto; padding-right: 4px; }
+  .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .checks.one { grid-template-columns: 1fr; }
   .check { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px; row-gap: 2px; align-items: center; padding: 8px 10px; border: 1px solid transparent; border-radius: var(--radius-sm); cursor: pointer; transition: background .15s, border-color .15s; }
   .check:hover { background: var(--s2); }
   .check:has(input:checked) { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: color-mix(in srgb, var(--accent) 7%, transparent); }
@@ -226,6 +229,45 @@
   .check .off { color: var(--warn); }
   .wiz-foot { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
   .wiz-foot .formerr { margin: 0; }
+  fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  legend { padding: 0; margin-bottom: 5px; font-size: 12px; color: var(--muted); }
+  .wiz-grid > * { min-width: 0; }
+  .wiz-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .check input[type="radio"] { border-radius: 50%; }
+  .check input[type="radio"]:checked::after { width: 6px; height: 6px; border-radius: 50%; clip-path: none; background: var(--accent-ink); }
+  .check:has(input:disabled) { opacity: .55; cursor: default; }
+  .check:has(input:disabled):hover { background: transparent; }
+  .check input:disabled { cursor: default; }
+  .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+  .path-row { display: flex; gap: 8px; }
+  .path-row input { flex: 1; font-family: var(--mono); font-size: 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; color: var(--fg-2); background: var(--s2); border: 1px solid var(--line); }
+  .chip svg { width: 14px; height: 14px; }
+  .picker { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--s2); }
+  .picker-bar { display: flex; align-items: center; gap: 6px; padding: 6px; border-bottom: 1px solid var(--line); }
+  .crumbs { flex: 1; min-width: 0; display: flex; align-items: center; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+  .crumbs button { all: unset; flex: none; padding: 3px 5px; border-radius: 5px; font: 12px var(--mono); color: var(--fg-2); cursor: pointer; }
+  .crumbs button:hover { background: var(--s3); color: var(--fg); }
+  .crumbs button:last-child { color: var(--fg); font-weight: 600; }
+  .crumbs button:focus-visible, .picker-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .crumbs .sep { flex: none; color: var(--muted); font: 12px var(--mono); }
+  .picker-list { display: flex; flex-direction: column; max-height: 220px; overflow-y: auto; padding: 4px; }
+  .picker-row { all: unset; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; color: var(--fg-2); cursor: pointer; }
+  .picker-row:hover { background: var(--s3); color: var(--fg); }
+  .picker-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .picker-row .tag { font: 11px var(--mono); color: var(--muted); }
+  .picker-empty { padding: 8px; font-size: 12px; color: var(--muted); }
+  .picker-foot { display: flex; align-items: center; gap: 8px; padding: 6px; border-top: 1px solid var(--line); }
+  .sel + .sel { margin-top: 20px; }
+  .sel h4 { margin: 0 0 2px; font-size: 13px; font-weight: 600; }
+  .sel-group { margin-top: 10px; }
+  .sel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .sel-title { font-size: 12px; font-weight: 500; color: var(--fg-2); }
+  details.adv summary { cursor: pointer; color: var(--fg-2); font-size: 13px; padding: 2px 0; }
+  details.adv[open] summary { margin-bottom: 10px; }
+  .wiz-info { display: flex; flex-direction: column; gap: 10px; }
+  #wizTools, #editTools { margin-top: 20px; }
   @media (prefers-reduced-motion: reduce) {
     *, *::after { animation: none !important; transition: none !important; }
   }
@@ -234,39 +276,74 @@
 <body>
 <dialog id="wizDlg">
   <header class="wiz-head">
-    <h3 data-i18n="wiz.title"></h3>
-    <div class="steps" aria-hidden="true"><span class="step"></span><span class="step"></span></div>
+    <h3 id="wizTitle"></h3>
+    <div class="steps" aria-hidden="true"><span class="step" data-s="1"></span><span class="step" data-s="2"></span></div>
   </header>
   <form method="dialog" id="wizForm" autocomplete="off">
+    <div class="wiz-body">
     <section data-w="1">
       <div class="wiz-grid">
         <div class="wiz-field wiz-wide">
           <label for="wizName" data-i18n="roots.namePh"></label>
-          <input id="wizName" required>
+          <input id="wizName" required pattern="[a-z][a-z0-9\-]{1,31}" data-i18n-title="form.nameRule">
         </div>
         <div class="wiz-field wiz-wide">
           <label for="wizPurpose" data-i18n="wiz.mission"></label>
           <textarea id="wizPurpose" rows="3" data-i18n-ph="wiz.missionPh" required></textarea>
         </div>
-        <div class="wiz-field wiz-wide">
+        <fieldset class="wiz-field wiz-wide">
+          <legend data-i18n="wiz.location"></legend>
+          <div class="checks one">
+            <label class="check"><input type="radio" name="wizLoc" value="new" checked><b id="wizLocNew"></b></label>
+            <label class="check"><input type="radio" name="wizLoc" value="existing"><b data-i18n="wiz.locExisting"></b></label>
+          </div>
+        </fieldset>
+        <div class="wiz-field wiz-wide" id="wizExisting" hidden>
           <label for="wizFolder" data-i18n="wiz.folder"></label>
-          <input id="wizFolder" data-i18n-ph="wiz.folderPh" autocomplete="off">
+          <div class="path-row">
+            <input id="wizFolder" data-i18n-ph="wiz.folderPh" autocomplete="off" spellcheck="false">
+            <button class="btn" type="button" id="wizBrowse"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg><span data-i18n="wiz.browse"></span></button>
+          </div>
+          <div class="picker" id="wizPicker" hidden>
+            <div class="picker-bar">
+              <button class="btn icon ghost" type="button" id="pickUp" data-i18n-title="wiz.pickerUp" data-i18n-aria="wiz.pickerUp"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></button>
+              <nav class="crumbs" id="pickCrumbs" data-i18n-aria="wiz.pickerPath"></nav>
+            </div>
+            <div class="picker-list" id="pickList"></div>
+            <div class="picker-foot">
+              <span class="formerr" id="pickErr" hidden></span>
+              <span class="spacer"></span>
+              <button class="btn primary sm" type="button" id="pickUse" data-i18n="wiz.pickerUse"></button>
+            </div>
+          </div>
           <p class="wiz-hint" data-i18n="wiz.folderHint"></p>
+          <div class="wiz-info" id="wizInfo" hidden>
+            <div class="chips" id="wizChips"></div>
+            <div class="formerr" id="wizInfoErr" hidden></div>
+            <fieldset class="wiz-field" id="wizConvSet">
+              <legend data-i18n="wiz.conversation"></legend>
+              <div class="checks one" id="wizConvs"></div>
+              <p class="wiz-hint" id="wizConvNone" data-i18n="wiz.convNone" hidden></p>
+            </fieldset>
+          </div>
         </div>
+      </div>
+    </section>
+    <section data-w="2" hidden>
+      <div class="wiz-grid three">
         <div class="wiz-field">
           <label for="wizModel" data-i18n="roots.model"></label><select id="wizModel"></select>
         </div>
         <div class="wiz-field">
           <label for="wizThinking" data-i18n="edit.thinking"></label><select id="wizThinking"></select>
         </div>
+        <div class="wiz-field">
+          <label for="wizCompact" data-i18n="form.compact"></label><input id="wizCompact" type="number" min="1" max="100" step="1" data-i18n-ph="form.compactPh">
+        </div>
       </div>
+      <div id="wizTools"></div>
     </section>
-    <section data-w="2" hidden>
-      <p class="wiz-hint" data-i18n="wiz.mcpHint"></p>
-      <div class="checks" id="wizMcp"></div>
-      <p class="wiz-hint" data-i18n="wiz.skillHint"></p>
-      <div class="checks" id="wizSkills"></div>
-    </section>
+    </div>
     <footer class="wiz-foot">
       <span class="formerr" id="wizErr" hidden></span>
       <span class="spacer"></span>
@@ -279,16 +356,48 @@
 </dialog>
 <dialog id="editDlg">
   <h3><span data-i18n="edit.title"></span> · <span class="mono" id="editTitle"></span></h3>
-  <form method="dialog" id="editForm">
-    <label for="editPurpose" data-i18n="edit.purpose"></label><input id="editPurpose" autocomplete="off">
-    <label for="editModel" data-i18n="edit.model"></label><select id="editModel"></select>
-    <label for="editThinking" data-i18n="edit.thinking"></label><select id="editThinking"></select>
-    <span class="formerr" id="editErr" hidden></span>
-    <div class="row">
+  <form method="dialog" id="editForm" autocomplete="off">
+    <div class="wiz-body">
+      <div class="wiz-grid">
+        <div class="wiz-field wiz-wide">
+          <label for="editName" data-i18n="edit.name"></label>
+          <input id="editName" required pattern="[a-z][a-z0-9\-]{1,31}" data-i18n-title="form.nameRule">
+        </div>
+        <div class="wiz-field wiz-wide">
+          <label for="editPurpose" data-i18n="edit.purpose"></label>
+          <textarea id="editPurpose" rows="2"></textarea>
+        </div>
+        <div class="wiz-field">
+          <label for="editModel" data-i18n="edit.model"></label><select id="editModel"></select>
+        </div>
+        <div class="wiz-field">
+          <label for="editThinking" data-i18n="edit.thinking"></label><select id="editThinking"></select>
+        </div>
+        <details class="adv wiz-wide" id="editAdv">
+          <summary data-i18n="edit.advanced"></summary>
+          <div class="wiz-grid three">
+            <div class="wiz-field">
+              <label for="editTask" data-i18n="edit.taskModel"></label><select id="editTask"></select>
+            </div>
+            <div class="wiz-field">
+              <label for="editSmol" data-i18n="edit.smolModel"></label><select id="editSmol"></select>
+            </div>
+            <div class="wiz-field">
+              <label for="editCompact" data-i18n="form.compact"></label><input id="editCompact" type="number" min="1" max="100" step="1" data-i18n-ph="form.compactPh">
+            </div>
+          </div>
+        </details>
+      </div>
+      <div id="editTools"></div>
+    </div>
+    <p class="wiz-hint" id="editHint" data-i18n="edit.restartHint" hidden></p>
+    <footer class="wiz-foot">
+      <span class="formerr" id="editErr" hidden></span>
+      <span class="spacer"></span>
       <button class="btn ghost" type="button" id="editCancel" data-i18n="edit.cancel"></button>
       <button class="btn" type="button" id="editSave" data-i18n="edit.save"></button>
       <button class="btn primary" type="button" id="editSaveRestart" data-i18n="edit.saveRestart"></button>
-    </div>
+    </footer>
   </form>
 </dialog>
 <aside>
@@ -301,6 +410,10 @@
   <section id="orphans" hidden>
     <div class="section-title" data-i18n="orphans.title"></div>
     <div id="orphanlist"></div>
+  </section>
+  <section id="archived" hidden>
+    <div class="section-title" data-i18n="archive.title"></div>
+    <div id="archivedlist"></div>
   </section>
   <div class="connstate"><span class="dot" id="conndot" data-h="ok"></span><span id="conntext"></span><span class="spacer"></span>
     <select id="lang" data-i18n-aria="lang.label"><option value="en">EN</option><option value="it">IT</option></select></div>
@@ -352,6 +465,13 @@ const ICONS = {
   repaint: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M12 8v4l3 2"/>',
   treestop: '<circle cx="12" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="5" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><path d="M12 7v4M12 13v4M7 12h4M13 12h4"/>',
   archive: '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  git: '<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+  doc: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  sparkles: '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>',
+  plug: '<path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>',
+  restore: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
 };
 const ic = (n, cls = "") => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
 
@@ -433,6 +553,7 @@ function paintOverlay(host, s) {
 const toolsHtml = () => `<div class="group"><select aria-label="${t("tools.modelAria")}">${MODELS.map(m => `<option value="${m}">${m}</option>`).join("")}</select>
   <button class="btn" data-a="restart" title="${t("tools.restartTitle")}">${ic("restart")}${t("tools.restart")}</button></div>
   <button class="btn" data-a="toggle"></button>
+  <button class="btn icon ghost" data-a="new-child" title="${t("tools.newChild")}" aria-label="${t("tools.newChild")}">${ic("plus")}</button>
   <button class="btn icon ghost" data-a="edit" title="${t("tools.edit")}" aria-label="${t("tools.edit")}">${ic("edit")}</button>
   <button class="btn icon ghost" data-a="archive" title="${t("tools.archive")}" aria-label="${t("tools.archive")}">${ic("archive")}</button>
   <button class="btn icon ghost" data-a="repaint" title="${t("tools.repaint")}" aria-label="${t("tools.repaint")}">${ic("repaint")}</button>
@@ -442,6 +563,7 @@ function wireTools(el, route) {
   el.querySelector('[data-a="restart"]').onclick = e => { e.stopPropagation(); api(`/api/sessions/${enc(route)}/restart`, { model: el.querySelector("select").value }).then(refresh); };
   el.querySelector('[data-a="toggle"]').onclick = e => { e.stopPropagation(); api(`/api/sessions/${enc(route)}/${byRoute(route).running ? "stop" : "start"}`, {}).then(refresh); };
   el.querySelector('[data-a="edit"]').onclick = e => { e.stopPropagation(); openEdit(route); };
+  el.querySelector('[data-a="new-child"]').onclick = e => { e.stopPropagation(); void openWizard("child", route); };
   el.querySelector('[data-a="archive"]').onclick = e => { e.stopPropagation(); void archive(route); };
   el.querySelector('[data-a="repaint"]').onclick = e => { e.stopPropagation(); repaint(route); };
   el.querySelector('[data-a="stop-subtree"]').onclick = e => { e.stopPropagation(); void treeStop(route, "stop-subtree"); };
@@ -449,34 +571,236 @@ function wireTools(el, route) {
   el.querySelector("select").onclick = e => e.stopPropagation();
 }
 
-// Edit the recipe (purpose, model, thinking). Saved at once; a running session is flagged restart-needed unless "save and restart".
+// Edit the whole recipe. Saved at once; a running session is flagged restart-needed unless "Save and restart".
 const THINKING = ["", "minimal", "low", "medium", "high", "xhigh", "max"];
-function openEdit(route) {
+const fillSelect = (select, items, current) => { select.replaceChildren(...items.map(([v, l]) => new Option(l, v))); select.value = current; };
+const modelItems = current => [["", t("model.default")], ...(current && !MODELS.includes(current) ? [current, ...MODELS] : MODELS).map(m => [m, m])];
+const thinkingItems = () => THINKING.map(l => [l, l || t("edit.thinkingDefault")]);
+const sameJson = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+const sameSelection = (a, b) => (Array.isArray(a) && Array.isArray(b) ? a.length === b.length && a.every(x => b.includes(x)) : a === b);
+const RTF = new Intl.RelativeTimeFormat(LANG, { numeric: "auto" });
+const ago = iso => {
+  const sec = (new Date(iso).getTime() - Date.now()) / 1000;
+  for (const [unit, size] of [["year", 31536000], ["month", 2592000], ["day", 86400], ["hour", 3600], ["minute", 60]]) if (Math.abs(sec) >= size) return RTF.format(Math.round(sec / size), unit);
+  return RTF.format(0, "second");
+};
+
+// What orch knows about a folder: conversations, its own skills and MCP servers. `route` hides servers orch wrote itself.
+async function folderInfo(folder, route) {
+  const r = await fetch(`/api/folder-info?folder=${enc(folder)}${route ? `&route=${enc(route)}` : ""}`).catch(() => null);
+  if (!r) return { error: t("conn.down") };
+  return r.ok ? { info: await r.json() } : { error: await r.text() };
+}
+
+// Skills and MCP selector shared by the wizard and the edit dialog. recipe = current selection (undefined for a new session).
+function checkRow({ type = "checkbox", name, value, label, note = "", checked, off = false, locked = false }) {
+  const row = document.createElement("label");
+  row.className = "check";
+  row.innerHTML = `<input type="${type}"><b></b><small></small>`;
+  row.title = note || label;
+  row.querySelector("b").textContent = label;
+  const small = row.querySelector("small");
+  small.textContent = note;
+  if (off) small.className = "off";
+  const box = row.querySelector("input");
+  box.value = value;
+  if (name) box.name = name;
+  box.checked = checked;
+  box.disabled = locked;
+  return row;
+}
+
+function toolSection(host, titleKey, hint) {
+  const sec = document.createElement("section");
+  sec.className = "sel";
+  const h = document.createElement("h4");
+  h.textContent = t(titleKey);
+  const p = document.createElement("p");
+  p.className = "wiz-hint";
+  p.textContent = hint;
+  sec.append(h, p);
+  host.appendChild(sec);
+  return sec;
+}
+
+function toolGroup(sec, title, rows) {
+  const wrap = document.createElement("div");
+  wrap.className = "sel-group";
+  wrap.innerHTML = `<div class="sel-head"><span class="sel-title"></span><span class="mono count"></span><span class="spacer"></span><button class="btn ghost sm" type="button"></button></div><div class="checks"></div>`;
+  wrap.querySelector(".sel-title").textContent = title;
+  const boxes = rows.map(r => {
+    const row = checkRow(r);
+    wrap.querySelector(".checks").appendChild(row);
+    return row.querySelector("input");
+  });
+  const free = boxes.filter(b => !b.disabled);
+  const count = wrap.querySelector(".count");
+  const toggle = wrap.querySelector("button");
+  toggle.hidden = !free.length;
+  const sync = () => {
+    count.textContent = `${boxes.filter(b => b.checked).length}/${boxes.length}`;
+    toggle.textContent = t(free.every(b => b.checked) ? "form.selectNone" : "form.selectAll");
+  };
+  toggle.onclick = () => {
+    const on = !free.every(b => b.checked);
+    for (const b of free) b.checked = on;
+    wrap.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  wrap.addEventListener("change", sync);
+  sync();
+  sec.appendChild(wrap);
+  return boxes;
+}
+
+function renderTools(host, { folderInfo: info, recipe }) {
+  host.replaceChildren();
+  const project = { projectSkills: info?.projectSkills ?? [], projectMcp: info?.projectMcp ?? [], errors: info?.errors ?? [] };
+
+  const mcpSec = toolSection(host, "form.mcpTitle", t("form.mcpHint"));
+  const mode = recipe ? recipe.mcp ?? "all" : null; // an absent recipe mcp means "all"
+  let mcpTouched = false;
+  mcpSec.addEventListener("change", () => { mcpTouched = true; });
+  const userServers = Object.entries(CATALOG?.mcpServers ?? {});
+  const userBoxes = userServers.length
+    ? toolGroup(mcpSec, t("form.groupUser"), userServers.map(([name, d]) => {
+        const on = d.enabled !== false;
+        return { value: name, label: name, note: on ? "" : t("wiz.disabledInConfig"), off: !on, checked: mode ? mode === "all" || mode === "manual" || mode.includes(name) : on };
+      }))
+    : [];
+  if (project.projectMcp.length)
+    toolGroup(mcpSec, t("form.groupProject"), project.projectMcp.map(m => ({ value: m.name, label: m.name, note: m.enabled ? m.source : `${m.source} · ${t("form.projectOff")}`, off: !m.enabled, checked: true, locked: true })));
+  for (const text of project.errors) {
+    const e = document.createElement("p");
+    e.className = "formerr";
+    e.textContent = text;
+    mcpSec.appendChild(e);
+  }
+  if (!userServers.length && !project.projectMcp.length) {
+    const none = document.createElement("p");
+    none.className = "wiz-hint";
+    none.textContent = t("form.mcpNone");
+    mcpSec.appendChild(none);
+  }
+  if (mode === "manual") {
+    const manual = document.createElement("p");
+    manual.className = "wiz-hint";
+    manual.textContent = t("form.mcpManual");
+    mcpSec.appendChild(manual);
+  }
+
+  // Skills: everything checked = no filter (skills:null, future skills included); anything unchecked = explicit allowlist.
+  const skillsSec = toolSection(host, "form.skillsTitle", t("form.skillsHint"));
+  const explicit = recipe && Array.isArray(recipe.skills) ? recipe.skills : null;
+  const seen = new Set();
+  const unseen = list => list.filter(s => !seen.has(s.name) && !!seen.add(s.name));
+  const groups = [
+    ["form.groupOrch", unseen((CATALOG?.workspaceSkills ?? []).map(s => ({ name: s.name, note: s.role })))],
+    ["form.groupUser", unseen((CATALOG?.skills ?? []).map(s => ({ name: s.name, note: "" })))],
+    ["form.groupProject", unseen(project.projectSkills.map(s => ({ name: s.name, note: s.source })))],
+  ];
+  const skillBoxes = groups.filter(([, list]) => list.length).flatMap(([key, list]) =>
+    toolGroup(skillsSec, t(key), list.map(s => ({ value: s.name, label: s.name, note: s.note, checked: !explicit || explicit.includes(s.name) }))));
+
+  return {
+    mcp: () => {
+      if (!userBoxes.length) return recipe?.mcp ?? "all";
+      if (mode === "manual" && !mcpTouched) return "manual";
+      return userBoxes.every(b => b.checked) ? "all" : userBoxes.filter(b => b.checked).map(b => b.value);
+    },
+    skills: () => {
+      if (!skillBoxes.length) return recipe?.skills ?? null;
+      return skillBoxes.every(b => b.checked) ? null : skillBoxes.filter(b => b.checked).map(b => b.value);
+    },
+  };
+}
+
+// A rename moves the route: carry the UI state (selected root, open and focused cards) over to the new route.
+function remapRoute(from, to) {
+  const re = r => (r === from || r.startsWith(`${from}/`) ? to + r.slice(from.length) : r);
+  if (selected === from) { selected = to; save("termui:selected", to); }
+  const root = from.split("/")[0];
+  for (const k of ["open", "focus"]) {
+    const old = `termui:${k}:${root}`;
+    const v = ls(old, null);
+    if (v === null) continue;
+    if (re(root) !== root) localStorage.removeItem(old);
+    save(`termui:${k}:${re(root)}`, Array.isArray(v) ? v.map(re) : re(v));
+  }
+}
+
+let editBase = null; // session snapshot the dialog was opened on
+let editTools = null; // null until the folder info has loaded: then mcp/skills are left out of the save
+async function openEdit(route) {
   const s = byRoute(route);
   const dlg = $("editDlg");
   dlg.dataset.route = route;
+  editBase = s;
+  editTools = null;
   $("editTitle").textContent = route;
+  $("editName").value = s.name;
   $("editPurpose").value = s.purpose ?? "";
-  $("editModel").innerHTML = MODELS.map(m => `<option value="${m}">${m}</option>`).join("");
-  $("editModel").value = (s.model ?? "").split(":")[0];
-  $("editThinking").innerHTML = THINKING.map(l => `<option value="${l}">${l || t("edit.thinkingDefault")}</option>`).join("");
-  $("editThinking").value = s.thinking ?? "";
+  fillSelect($("editModel"), modelItems((s.model ?? "").split(":")[0]), (s.model ?? "").split(":")[0]);
+  fillSelect($("editThinking"), thinkingItems(), s.thinking ?? "");
+  fillSelect($("editTask"), modelItems(s.roles?.task), s.roles?.task ?? "");
+  fillSelect($("editSmol"), modelItems(s.roles?.smol), s.roles?.smol ?? "");
+  $("editCompact").value = s.compactPercent ?? "";
+  $("editAdv").open = !!(s.roles?.task || s.roles?.smol || s.compactPercent != null);
+  $("editHint").hidden = !s.running;
   $("editErr").hidden = true;
+  const host = $("editTools");
+  host.textContent = t("form.loading");
   dlg.showModal();
+  const res = await folderInfo(s.folder, route);
+  if (!dlg.open || dlg.dataset.route !== route) return;
+  editTools = renderTools(host, { folderInfo: res.info, recipe: s });
 }
+
 async function saveEdit(restart) {
   const dlg = $("editDlg");
-  const r = await api(`/api/sessions/${enc(dlg.dataset.route)}/edit`, {
-    purpose: $("editPurpose").value.trim(),
-    model: $("editModel").value,
-    thinking: $("editThinking").value || null,
-    restart,
-  });
-  if (!r.ok) {
-    $("editErr").textContent = await r.text();
-    $("editErr").hidden = false;
-    return;
+  const showErr = text => { $("editErr").textContent = text; $("editErr").hidden = false; };
+  $("editErr").hidden = true;
+  if (!$("editForm").reportValidity()) return;
+  let s = editBase;
+  let route = dlg.dataset.route;
+  const name = $("editName").value.trim();
+  if (name !== s.name) {
+    const parent = route.split("/").slice(0, -1).join("/");
+    const to = parent ? `${parent}/${name}` : name;
+    const m = await api(`/api/sessions/${enc(route)}/move`, { to });
+    if (!m.ok) return showErr(await m.text());
+    remapRoute(route, to);
+    route = to;
+    dlg.dataset.route = to;
+    s = editBase = { ...s, name, route: to };
+    await refresh();
   }
+  // Only changed fields go out: re-sending an equal value in another shape would flag restart-needed for nothing.
+  const body = {};
+  const purpose = $("editPurpose").value.trim();
+  if (purpose !== (s.purpose ?? "")) body.purpose = purpose;
+  const model = $("editModel").value;
+  if (model && model !== (s.model ?? "").split(":")[0]) body.model = model;
+  const thinking = $("editThinking").value || null;
+  if (!sameJson(thinking, s.thinking)) body.thinking = thinking;
+  const roles = { ...(s.roles ?? {}) };
+  for (const [key, id] of [["task", "editTask"], ["smol", "editSmol"]]) {
+    if ($(id).value) roles[key] = $(id).value;
+    else delete roles[key];
+  }
+  const nextRoles = Object.keys(roles).length ? roles : null;
+  if (!sameJson(nextRoles, s.roles)) body.roles = nextRoles;
+  const compactRaw = $("editCompact").value.trim();
+  const compact = compactRaw === "" ? null : Number(compactRaw);
+  if (!sameJson(compact, s.compactPercent)) body.compactPercent = compact;
+  if (editTools) {
+    const mcp = editTools.mcp();
+    if (!sameSelection(mcp, s.mcp ?? "all")) body.mcp = mcp;
+    const skills = editTools.skills();
+    if (!sameSelection(skills, s.skills ?? null)) body.skills = skills;
+  }
+  body.restart = restart;
+  const r = await api(`/api/sessions/${enc(route)}/edit`, body);
+  if (!r.ok) return showErr(await r.text());
   dlg.close();
   await refresh();
 }
@@ -515,6 +839,7 @@ async function archive(route) {
   if (!r.ok) return alert(await r.text());
   if (selected === route) { selected = null; save("termui:selected", null); }
   await refresh();
+  await refreshAux();
 }
 // Keep the selector on the session's current model unless the user is choosing one.
 const syncModel = (el, s) => {
@@ -626,9 +951,10 @@ function paintIssues(host, issues, route) {
 }
 
 async function refreshAux() {
-  const [orphans, globalIssues] = await Promise.all([
+  const [orphans, globalIssues, archived] = await Promise.all([
     fetch("/api/orphans").then(r => r.json()),
     fetch("/api/global-issues").then(r => r.json()),
+    fetch("/api/archive").then(r => (r.ok ? r.json() : [])).catch(() => []),
   ]);
   $("orphans").hidden = !orphans.length;
   $("orphanlist").replaceChildren();
@@ -657,6 +983,34 @@ async function refreshAux() {
     }
     row.append(label, actions);
     $("orphanlist").appendChild(row);
+  }
+  $("archived").hidden = !archived.length;
+  $("archivedlist").replaceChildren();
+  for (const item of archived) {
+    const row = document.createElement("div");
+    row.className = "orphan";
+    const label = document.createElement("span");
+    label.className = "mono";
+    label.textContent = item.route;
+    label.title = item.id;
+    const when = document.createElement("span");
+    when.className = "mono";
+    when.textContent = new Date(item.archivedAt).toLocaleString(LANG, { dateStyle: "short", timeStyle: "short" });
+    const actions = document.createElement("div");
+    actions.className = "orphan-actions";
+    const button = document.createElement("button");
+    button.className = "btn";
+    button.innerHTML = ic("restore");
+    button.append(t("archive.restore"));
+    button.onclick = async () => {
+      const response = await api(`/api/archive/${enc(item.id)}/restore`, {});
+      if (!response.ok) return alert(await response.text());
+      await refresh();
+      await refreshAux();
+    };
+    actions.appendChild(button);
+    row.append(label, when, actions);
+    $("archivedlist").appendChild(row);
   }
   $("globalissues").hidden = !globalIssues.length;
   paintIssues($("globalissues"), globalIssues);
@@ -754,6 +1108,7 @@ $("closeAll").onclick = () => { save(`termui:open:${selected}`, []); save(`termu
 $("editCancel").onclick = () => $("editDlg").close();
 $("editSave").onclick = () => void saveEdit(false);
 $("editSaveRestart").onclick = () => void saveEdit(true);
+$("editForm").onsubmit = e => { e.preventDefault(); void saveEdit(false); };
 
 // Draggable split between root terminal and child column.
 $("kidcol").style.width = `${ls("termui:kidw", 520)}px`;
@@ -773,58 +1128,140 @@ function apply(list) {
 }
 const refresh = async () => apply(await (await fetch("/api/sessions")).json());
 
-const defaults = await (await fetch("/api/recipe-defaults?kind=root")).json();
-const catalog = CATALOG;
-
-// New-root wizard: identity and mission -> MCP servers -> skills. Create = POST with the whole selection.
+// Session wizard, shared by "New root" and "New child": place (name, mission, folder, conversation) -> model and tools.
+// Create = one POST /api/sessions with the whole selection.
+const wiz = { mode: "root", parent: null, defaults: {}, res: null, loadedFolder: null, seq: 0, timer: 0, tools: null, toolsFor: null, convModel: null, pickerDir: null };
 let wizStep = 1;
-const sel = { mcp: new Set(), skills: new Set() };
+const wizLoc = () => document.querySelector('input[name="wizLoc"]:checked').value;
+const wizConv = () => document.querySelector('input[name="wizConv"]:checked')?.value ?? "";
+const defaultModel = () => wiz.defaults.model?.split(":")[0] ?? "";
+const wizError = text => { $("wizErr").textContent = text ?? ""; $("wizErr").hidden = !text; };
 
-function checkRow(list, value, label, note, checked, off) {
-  const row = document.createElement("label");
-  row.className = "check";
-  row.innerHTML = `<input type="checkbox" value="${value}"><b></b><small></small>`;
-  row.title = note || label;
-  row.querySelector("b").textContent = label;
-  const small = row.querySelector("small");
-  if (off) { small.className = "off"; small.textContent = note; }
-  else small.textContent = note;
-  const box = row.querySelector("input");
-  box.checked = checked;
-  box.onchange = () => (box.checked ? list.add(value) : list.delete(value));
-  return row;
+async function openWizard(mode, parent = null) {
+  wiz.defaults = await fetch(`/api/recipe-defaults?kind=${mode}`).then(r => (r.ok ? r.json() : {})).catch(() => ({}));
+  Object.assign(wiz, { mode, parent, res: null, loadedFolder: null, seq: wiz.seq + 1, tools: null, toolsFor: null, convModel: null, pickerDir: null });
+  clearTimeout(wiz.timer);
+  $("wizTitle").textContent = mode === "child" ? t("wiz.titleChild", { parent }) : t("wiz.title");
+  $("wizLocNew").textContent = mode === "child" ? t("wiz.locNewChild", { parent }) : t("wiz.locNew");
+  for (const id of ["wizName", "wizPurpose", "wizFolder"]) $(id).value = "";
+  document.querySelector('input[name="wizLoc"][value="new"]').checked = true;
+  for (const id of ["wizExisting", "wizPicker", "wizInfo"]) $(id).hidden = true;
+  fillSelect($("wizModel"), modelItems(defaultModel()), defaultModel());
+  fillSelect($("wizThinking"), thinkingItems(), wiz.defaults.thinking ?? "");
+  $("wizCompact").value = wiz.defaults.compactPercent ?? "";
+  $("wizTools").replaceChildren();
+  wizError();
+  wizGo(1);
+  $("wizDlg").showModal();
 }
 
-function fillWizard() {
-  $("wizModel").innerHTML = (catalog.models ?? []).map(m => `<option value="${m}">${m}</option>`).join("");
-  $("wizModel").value = defaults.model?.split(":")[0] ?? "";
-  $("wizThinking").innerHTML = THINKING.map(l => `<option value="${l}">${l || t("edit.thinkingDefault")}</option>`).join("");
-  $("wizThinking").value = defaults.thinking ?? "";
-  const mcp = $("wizMcp");
-  mcp.replaceChildren();
-  sel.mcp.clear();
-  for (const [name, d] of Object.entries(catalog.mcpServers ?? {})) {
-    const on = d.enabled !== false;
-    if (on) sel.mcp.add(name);
-    mcp.appendChild(checkRow(sel.mcp, name, name, on ? "" : t("wiz.disabledInConfig"), on, !on));
+const chip = (icon, text) => {
+  const el = document.createElement("span");
+  el.className = "chip";
+  el.innerHTML = ic(icon);
+  el.append(text);
+  return el;
+};
+
+// Folder facts under the path field: chips, problems, and the conversations that can be resumed.
+function paintInfo() {
+  const res = wiz.res;
+  $("wizInfo").hidden = !res;
+  if (!res) return;
+  const info = res.info;
+  const problems = res.error ? [res.error] : [...(info.isSession ? [t("wiz.isSession")] : []), ...(info.errors ?? [])];
+  $("wizInfoErr").hidden = !problems.length;
+  $("wizInfoErr").textContent = problems.join(" · ");
+  const chips = [];
+  if (info?.isGit) chips.push(chip("git", t("wiz.chipGit")));
+  if (info?.hasAgentsMd) chips.push(chip("doc", t("wiz.chipAgents")));
+  if (info?.projectSkills.length) chips.push(chip("sparkles", t("wiz.chipSkills", { n: info.projectSkills.length })));
+  if (info?.projectMcp.length) chips.push(chip("plug", t("wiz.chipMcp", { n: info.projectMcp.length })));
+  $("wizChips").replaceChildren(...chips);
+  $("wizConvSet").hidden = !info || info.isSession;
+  const list = $("wizConvs");
+  const picked = wizConv();
+  list.replaceChildren();
+  $("wizConvNone").hidden = true;
+  if (!info || info.isSession) return;
+  list.appendChild(checkRow({ type: "radio", name: "wizConv", value: "", label: t("wiz.convNew"), note: t("wiz.convNewNote"), checked: !info.conversations.some(c => !c.live && c.id === picked) }));
+  for (const c of info.conversations) {
+    const note = [ago(c.modified), c.model, c.live ? t("wiz.convOpen") : null].filter(Boolean).join(" · ");
+    list.appendChild(checkRow({ type: "radio", name: "wizConv", value: c.id, label: c.title ?? t("wiz.convUntitled"), note, checked: !c.live && c.id === picked, off: c.live, locked: c.live }));
   }
-  const sk = $("wizSkills");
-  sk.replaceChildren();
-  sel.skills.clear();
-  // Orchestrator skills plus omp's own user-level skills, all on by default.
-  // Leaving everything checked sends skills:null (omp keeps its defaults, future skills included);
-  // unchecking any row switches the session to an explicit allowlist.
-  const seen = new Set();
-  const rows = [...(catalog.workspaceSkills ?? []).map(s => ({ name: s.name, note: s.role, on: true })),
-                ...(catalog.skills ?? []).map(s => ({ name: s.name, note: "omp user", on: true }))];
-  for (const r of rows) {
-    if (seen.has(r.name)) continue;
-    seen.add(r.name);
-    if (r.on) sel.skills.add(r.name);
-    sk.appendChild(checkRow(sel.skills, r.name, r.name, r.note, r.on, false));
+  $("wizConvNone").hidden = info.conversations.length > 0;
+}
+
+async function loadInfo() {
+  const folder = $("wizFolder").value.trim();
+  const seq = ++wiz.seq;
+  if (!folder) { wiz.res = null; wiz.loadedFolder = folder; return paintInfo(); }
+  const res = await folderInfo(folder);
+  if (seq !== wiz.seq) return;
+  wiz.res = res;
+  wiz.loadedFolder = folder;
+  wiz.convModel = null;
+  paintInfo();
+}
+const scheduleInfo = (delay = 350) => { clearTimeout(wiz.timer); wiz.timer = setTimeout(() => void loadInfo(), delay); };
+
+// A conversation brings its own model; going back to "new" restores the default unless the user changed it meanwhile.
+$("wizConvs").addEventListener("change", () => {
+  const id = wizConv();
+  const conv = wiz.res?.info?.conversations.find(c => c.id === id);
+  const model = conv?.model?.split(":")[0];
+  if (model && MODELS.includes(model)) { $("wizModel").value = model; wiz.convModel = model; }
+  else if (!id && wiz.convModel && $("wizModel").value === wiz.convModel) { $("wizModel").value = defaultModel(); wiz.convModel = null; }
+});
+
+// Folder picker: server-side directory listing, so the browser never needs filesystem access.
+async function pickerLoad(dir) {
+  const r = await fetch(`/api/fs${dir ? `?dir=${enc(dir)}` : ""}`).catch(() => null);
+  if (!r?.ok) {
+    if (dir) return pickerLoad(undefined);
+    $("pickErr").textContent = r ? await r.text() : t("conn.down");
+    $("pickErr").hidden = false;
+    return;
   }
-  $("wizErr").hidden = true;
-  wizGo(1);
+  $("pickErr").hidden = true;
+  const d = await r.json();
+  wiz.pickerDir = d.dir;
+  $("pickUp").disabled = !d.parent;
+  $("pickUp").onclick = () => void pickerLoad(d.parent);
+  const crumb = (label, path) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    b.onclick = () => void pickerLoad(path);
+    return b;
+  };
+  const nodes = [crumb("/", "/")];
+  let acc = "";
+  d.dir.split("/").filter(Boolean).forEach((seg, i) => {
+    acc += `/${seg}`;
+    if (i) { const sep = document.createElement("span"); sep.className = "sep"; sep.textContent = "/"; nodes.push(sep); }
+    nodes.push(crumb(seg, acc));
+  });
+  $("pickCrumbs").replaceChildren(...nodes);
+  $("pickCrumbs").scrollLeft = $("pickCrumbs").scrollWidth;
+  const rows = d.entries.map(e => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "picker-row";
+    b.innerHTML = `${ic("folder")}<span class="nm"></span><span class="tag"></span>`;
+    b.querySelector(".nm").textContent = e.name;
+    b.querySelector(".tag").textContent = [e.isGit ? t("wiz.tagGit") : null, e.isSession ? t("wiz.tagSession") : null].filter(Boolean).join(" · ");
+    b.onclick = () => void pickerLoad(e.path);
+    return b;
+  });
+  if (!rows.length) {
+    const none = document.createElement("div");
+    none.className = "picker-empty";
+    none.textContent = t("wiz.pickerEmpty");
+    rows.push(none);
+  }
+  $("pickList").replaceChildren(...rows);
+  $("pickList").scrollTop = 0;
 }
 
 function wizGo(step) {
@@ -834,25 +1271,66 @@ function wizGo(step) {
   $("wizBack").hidden = step === 1;
   $("wizNext").hidden = step === 2;
   $("wizDone").hidden = step !== 2;
+  if (step !== 2) return;
+  // Rebuilt only when the folder changed, so going back and forth keeps the user's choices.
+  const existing = wizLoc() === "existing";
+  const key = existing ? $("wizFolder").value.trim() : "";
+  if (wiz.toolsFor === key) return;
+  wiz.toolsFor = key;
+  wiz.tools = renderTools($("wizTools"), { folderInfo: existing ? wiz.res?.info : undefined });
 }
 
-$("newRoot").querySelector("summary").addEventListener("click", e => { e.preventDefault(); fillWizard(); $("wizDlg").showModal(); });
+$("newRoot").querySelector("summary").addEventListener("click", e => { e.preventDefault(); void openWizard("root"); });
+for (const radio of document.querySelectorAll('input[name="wizLoc"]'))
+  radio.onchange = () => {
+    $("wizExisting").hidden = wizLoc() !== "existing";
+    if (wizLoc() === "existing") void loadInfo();
+  };
+$("wizFolder").oninput = () => scheduleInfo();
+$("wizBrowse").onclick = () => {
+  $("wizPicker").hidden = !$("wizPicker").hidden;
+  if (!$("wizPicker").hidden) void pickerLoad($("wizFolder").value.trim() || undefined);
+};
+$("pickUse").onclick = () => {
+  $("wizFolder").value = wiz.pickerDir;
+  $("wizPicker").hidden = true;
+  scheduleInfo(0);
+};
 $("wizCancel").onclick = () => $("wizDlg").close();
-$("wizBack").onclick = () => wizGo(Math.max(1, wizStep - 1));
-$("wizNext").onclick = () => wizGo(Math.min(2, wizStep + 1));
+$("wizBack").onclick = () => wizGo(1);
+$("wizNext").onclick = async () => {
+  wizError();
+  if (!$("wizName").reportValidity() || !$("wizPurpose").reportValidity()) return;
+  if (wizLoc() === "existing") {
+    clearTimeout(wiz.timer);
+    if (wiz.loadedFolder !== $("wizFolder").value.trim()) await loadInfo();
+    if (!wiz.res?.info || wiz.res.info.isSession) return wizError(t("wiz.needFolder"));
+  }
+  wizGo(2);
+};
+$("wizForm").onsubmit = e => { e.preventDefault(); if (wizStep === 1) $("wizNext").click(); };
 $("wizDone").onclick = async () => {
-  const name = $("wizName").value.trim(), purpose = $("wizPurpose").value.trim();
-  const r = await api("/api/sessions", {
-    parent: null, name, purpose, start: true,
-    model: $("wizModel").value, thinking: $("wizThinking").value || null,
-    mcp: [...sel.mcp], skills: [...document.querySelectorAll("#wizSkills input")].every(b => b.checked) ? null : [...sel.skills],
-    folder: document.getElementById("wizFolder").value.trim() || undefined,
-  });
-  $("wizErr").hidden = r.ok;
-  if (!r.ok) return void ($("wizErr").textContent = await r.text());
+  if (!wiz.tools || !$("wizCompact").reportValidity()) return;
+  const name = $("wizName").value.trim();
+  const compact = $("wizCompact").value.trim();
+  const body = {
+    parent: wiz.mode === "child" ? wiz.parent : null, name, purpose: $("wizPurpose").value.trim(), start: true,
+    model: $("wizModel").value || undefined, thinking: $("wizThinking").value || null,
+    compactPercent: compact === "" ? null : Number(compact),
+    mcp: wiz.tools.mcp(), skills: wiz.tools.skills(),
+  };
+  if (wizLoc() === "existing") {
+    body.folder = $("wizFolder").value.trim();
+    if (wizConv()) body.sessionId = wizConv();
+  }
+  $("wizDone").disabled = true;
+  const r = await api("/api/sessions", body).finally(() => { $("wizDone").disabled = false; });
+  if (!r.ok) return wizError(await r.text());
   $("wizDlg").close();
-  $("wizName").value = ""; $("wizPurpose").value = ""; $("wizFolder").value = "";
-  selected = name; save("termui:selected", selected);
+  const route = body.parent ? `${body.parent}/${name}` : name;
+  selected = route.split("/")[0];
+  save("termui:selected", selected);
+  if (body.parent) save(`termui:open:${selected}`, [...openOf(selected).filter(n => n !== route), route]);
   await refresh();
   await refreshAux();
 };

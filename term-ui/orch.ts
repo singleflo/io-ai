@@ -1,19 +1,23 @@
 #!/usr/bin/env bun
 // orch: CLI over the term-ui API. Prints JSON.
+import { basename } from "node:path";
 const BASE = process.env.ORCH_URL ?? "http://127.0.0.1:8787";
 const [command, ...args] = process.argv.slice(2);
 
 const USAGE = `usage: orch <command>
   list
-  spawn --name N --purpose T [--parent R] [--model M --thinking L --task M --smol M --compact N --mcp a,b|all|manual] [--folder /abs/path] [--start]
+  spawn --name N --purpose T [--parent R] [--model M --thinking L --task M --smol M --compact N --mcp a,b|all|manual --skills a,b|all] [--folder /abs/path [--session id|latest|new]] [--start]
   start R
   stop R
-  restart R [--model M --thinking L --task M --smol M --compact N --mcp a,b|all|manual]
+  restart R [--model M --thinking L --task M --smol M --compact N --mcp a,b|all|manual --skills a,b|all]
   send R text...
   move R --to R2
-  edit R [--purpose T --model M --thinking L --task M --smol M --compact N --mcp a,b|all|manual] [--restart]
+  edit R [--name N --purpose T --model M --thinking L --task M --smol M --compact N --mcp a,b|all|manual --skills a,b|all] [--restart]
   archive R [--force]
-  attach <absolute folder> [--parent R] [--name N] [--session id|latest|new] [--start]   # link an existing folder (and conversation) as a child
+  archive-list
+  restore <archive id>
+  folder <absolute folder>   # project skills, project MCP and omp conversations of a folder
+  attach <absolute folder> [--parent R] [--name N] [--session id|latest|new] [--start]   # without --session: list conversations; with it: link the folder as a child
   adopt <absolute folder> [--session id]
   resolve R <code> <action>
   models [filter]
@@ -84,6 +88,8 @@ function recipeFlags(): Record<string, unknown> {
   }
   const mcp = flag("mcp");
   if (mcp !== undefined) recipe.mcp = mcp === "all" || mcp === "manual" ? mcp : mcp.split(",");
+  const skills = flag("skills");
+  if (skills !== undefined) recipe.skills = skills === "all" ? null : skills.split(",");
   return recipe;
 }
 
@@ -111,12 +117,16 @@ async function main(): Promise<void> {
     }
     case "spawn": {
       if (pos.length) throw new Error(USAGE);
+      const folder = flag("folder");
+      const session = flag("session");
+      if (session && !folder) throw new Error("--session needs --folder");
       console.log(await call("/api/sessions", {
         parent: flag("parent") ?? process.env.ORCH_ROUTE ?? null,
         name: required(flag("name")),
         purpose: required(flag("purpose")),
         start: flags.start === true,
-        folder: flag("folder"),
+        folder,
+        ...(session ? { sessionId: session === "new" ? null : session } : {}),
         ...recipeFlags(),
       }));
       break;
@@ -135,10 +145,17 @@ async function main(): Promise<void> {
     }
     case "edit": {
       if (pos.length !== 1) throw new Error(USAGE);
+      let route = pos[0];
+      const name = flag("name");
+      if (name && name !== route.split("/").pop()) {
+        const to = [...route.split("/").slice(0, -1), name].join("/");
+        await call(sessionPath(route, "move"), { to });
+        route = to;
+      }
       const body: Record<string, unknown> = { ...recipeFlags(), restart: flags.restart === true };
       const purpose = flag("purpose");
       if (purpose) body.purpose = purpose;
-      console.log(await call(sessionPath(pos[0], "edit"), body));
+      console.log(await call(sessionPath(route, "edit"), body));
       break;
     }
     case "archive": {
@@ -158,24 +175,34 @@ async function main(): Promise<void> {
     }
     case "attach": {
       const folder = pos[0];
-      if (!folder) throw new Error(USAGE);
-      const parent = flag("parent") ?? process.env.ORCH_ROUTE ?? "";
+      if (!folder || pos.length !== 1) throw new Error(USAGE);
       const session = flag("session");
-      const body: Record<string, unknown> = { parent: parent || null, folder };
-      const name = flag("name");
-      if (name) body.name = name;
-      if (flag("start")) body.start = true;
-      if (!session || session === "new") {
-        const list = JSON.parse(await call(`/api/attach?folder=${encodeURIComponent(folder)}`)) as { sessions: { id: string; title?: string; modified: string }[] };
-        if (!list.sessions.length) console.log(JSON.stringify({ sessions: [], hint: "no omp conversation in that folder yet: attach again with --session new" }));
-        else if (!session) console.log(JSON.stringify(list));
-        else console.log(await call("/api/attach", { ...body, start: body.start ?? false }));
+      if (!session) {
+        const info = JSON.parse(await call(`/api/folder-info?folder=${encodeURIComponent(folder)}`)) as { conversations: unknown[] };
+        console.log(JSON.stringify(info.conversations.length ? { conversations: info.conversations } : { conversations: [], hint: "no omp conversation in that folder yet: attach again with --session new" }));
         break;
       }
-      body.sessionId = session;
-      console.log(await call("/api/attach", body));
+      console.log(await call("/api/sessions", {
+        parent: flag("parent") ?? process.env.ORCH_ROUTE ?? null,
+        name: flag("name") ?? basename(folder),
+        folder,
+        sessionId: session === "new" ? null : session,
+        start: flags.start === true,
+      }));
       break;
     }
+    case "archive-list":
+      if (pos.length) throw new Error(USAGE);
+      console.log(await call("/api/archive"));
+      break;
+    case "restore":
+      if (pos.length !== 1) throw new Error(USAGE);
+      console.log(await call(`/api/archive/${encodeURIComponent(pos[0])}/restore`, {}));
+      break;
+    case "folder":
+      if (pos.length !== 1) throw new Error(USAGE);
+      console.log(await call(`/api/folder-info?folder=${encodeURIComponent(pos[0])}`));
+      break;
     case "resolve": {
       if (pos.length !== 3) throw new Error(USAGE);
       console.log(await call(sessionPath(pos[0], "resolve"), { code: pos[1], action: pos[2] }));

@@ -1,6 +1,6 @@
 // Core: shared state, issues, start pipeline, session-file observer, hello handling, issue resolution.
 import { createHash } from "node:crypto";
-import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { ServerWebSocket } from "bun";
@@ -30,6 +30,7 @@ export type Session = Found & {
   notices: string[];
   issues: Map<string, Issue>;
   spawnParts?: Parts;
+  spawnRecipe?: Record<string, string>; // JSON per tracked recipe field at spawn, for field-level `restart-needed`
   spawnKind?: Kind;
   spawnedAt?: number;
   spawnedWithId?: string | null;
@@ -57,7 +58,7 @@ export const hooks = { reconcile: () => {} };
 
 const SCROLLBACK_MAX = 256 * 1024;
 const BEAT_TIMEOUT_MS = 60_000;
-export const BLOCKING = new Set(["session-lost", "relocation-failed", "relocation-blocked", "mcp-profile-edited", "recipe-invalid", "duplicate-id", "unexpected-fork"]);
+export const BLOCKING = new Set(["session-lost", "relocation-failed", "relocation-blocked", "mcp-profile-invalid", "recipe-invalid", "duplicate-id", "unexpected-fork"]);
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 const base = (m?: string | null) => (m ?? "").split(":")[0];
 
@@ -139,6 +140,11 @@ export async function bucketSessions(folder: string): Promise<{ id: string; path
     .sort((a, b) => b.birthMs - a.birthMs);
 }
 
+// One helper call for many conversations: true = held by another omp process.
+export async function heldLeases(ids: string[]): Promise<Record<string, boolean>> {
+  return (await sdk(["leases", ...ids])).json as Record<string, boolean>;
+}
+
 // ---------- recipe persistence ----------
 export const saveRecipe = (s: Session) => s.recipe && writeRecipe(s.folder, s.recipe);
 
@@ -181,41 +187,111 @@ export const recipePart = (s: Session) => {
   return sha(JSON.stringify({ kind: s.kind, model: r.model, thinking: r.thinking, roles: r.roles, compactPercent: r.compactPercent, mcp: r.mcp, skills: r.skills, tools: r.tools }));
 };
 
-// ---------- MCP profile ----------
-function mcpContent(s: Session): string | null {
-  const mcp = s.recipe?.mcp ?? "all";
-  const servers = ctx.catalog?.mcpServers;
-  if (mcp === "manual" || !servers) return null;
-  const out: Record<string, Record<string, unknown>> = {};
-  if (mcp !== "all") for (const [name, d] of Object.entries(servers)) if (!mcp.includes(name)) out[name] = { type: d.type, command: d.command, args: d.args, url: d.url, enabled: false };
-  return `${JSON.stringify({ mcpServers: out }, null, 2)}\n`;
+// Recipe fields whose change needs a restart, one JSON string each (`restart-needed` names the fields that differ).
+export function trackedFields(r: Recipe, kind: Kind): Record<string, string> {
+  const roles = r.roles && Object.keys(r.roles).length ? r.roles : null;
+  const fields = { model: r.model, thinking: r.thinking, roles, compactPercent: r.compactPercent, mcp: r.mcp, skills: r.skills, tools: r.tools, kind };
+  return Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, JSON.stringify(v ?? null)]));
 }
 
-// Writes `<folder>/.omp/mcp.json` disabling every user-level MCP server not listed in the recipe.
-// Never overwrites a file orch did not write (hash guard) unless force.
-export function applyMcpProfile(s: Session, force = false): boolean {
-  const r = s.recipe!;
-  const content = mcpContent(s);
-  if (content === null) return true;
-  const file = join(s.folder, ".omp", "mcp.json");
-  const exists = existsSync(file);
-  if (!exists && r.mcp === "all") return true; // nothing to disable
-  const cur = exists ? sha(readFileSync(file, "utf8")) : null;
-  const next = sha(content);
-  if (cur !== next) {
-    if (exists && !force && cur !== r.mcpProfileHash) {
-      setIssue(s, "mcp-profile-edited", "ask", "`.omp/mcp.json` was edited by hand", ["keep-mine", "overwrite"]);
-      return false;
-    }
-    mkdirSync(join(s.folder, ".omp"), { recursive: true });
-    writeFileSync(file, content);
+// ---------- MCP profile ----------
+type McpFile = { mcpServers?: Record<string, Record<string, unknown>> } & Record<string, unknown>;
+const mcpFileOf = (folder: string) => join(folder, ".omp", "mcp.json");
+
+// Parses `<folder>/.omp/mcp.json`: undefined = missing file, null = unreadable or wrong shape.
+function readMcpFile(file: string): McpFile | null | undefined {
+  if (!existsSync(file)) return undefined;
+  try {
+    const v = JSON.parse(readFileSync(file, "utf8")) as McpFile | null;
+    if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+    if (v.mcpServers !== undefined && (!v.mcpServers || typeof v.mcpServers !== "object" || Array.isArray(v.mcpServers))) return null;
+    return v;
+  } catch {
+    return null;
   }
-  if (r.mcpProfileHash !== next) {
-    r.mcpProfileHash = next;
+}
+
+// Removes the servers orch owns from a folder's `.omp/mcp.json`; deletes the file when nothing else is left in it.
+function removeOwnedMcp(folder: string, owned: string[]) {
+  const file = mcpFileOf(folder);
+  const cur = readMcpFile(file);
+  if (!cur?.mcpServers) return;
+  const before = JSON.stringify(cur);
+  for (const name of owned) delete cur.mcpServers[name];
+  if (JSON.stringify(cur) === before) return;
+  if (!Object.keys(cur.mcpServers).length && Object.keys(cur).length === 1) unlinkSync(file);
+  else writeFileSync(file, `${JSON.stringify(cur, null, 2)}\n`);
+}
+
+// Merges into `<folder>/.omp/mcp.json` a disabled entry for every user-level MCP server the recipe does not select.
+// Only entries orch owns (`recipe.mcpOwned`) are ever rewritten or removed: a project definition with the same name wins.
+export function applyMcpProfile(s: Session): boolean {
+  const r = s.recipe!;
+  const file = mcpFileOf(s.folder);
+  const servers = ctx.catalog?.mcpServers;
+  if (r.mcpOwned === undefined && ctx.catalog) {
+    // Migration from the hash-guarded profile: the entries orch wrote were the disabled user-level servers.
+    const cur = readMcpFile(file);
+    r.mcpOwned = Object.entries(cur?.mcpServers ?? {}).filter(([name, d]) => servers?.[name] && d.enabled === false).map(([name]) => name);
+    delete (r as Record<string, unknown>).mcpProfileHash;
     saveRecipe(s);
   }
-  clearIssue(s, "mcp-profile-edited");
+  const mcp = r.mcp ?? "all";
+  if (mcp === "manual" || !servers || r.mcpOwned === undefined) return true;
+  const cur = readMcpFile(file);
+  if (cur === null) {
+    setIssue(s, "mcp-profile-invalid", "flag", "`.omp/mcp.json` is not valid JSON", []);
+    return false;
+  }
+  const next: McpFile = structuredClone(cur ?? {});
+  const wanted = mcp === "all" ? [] : Object.keys(servers).filter(name => !mcp.includes(name));
+  const owned = new Set(r.mcpOwned);
+  const before = JSON.stringify(cur ?? {});
+  for (const name of r.mcpOwned) if (!wanted.includes(name) && next.mcpServers) delete next.mcpServers[name];
+  for (const name of wanted) {
+    const present = next.mcpServers ? name in next.mcpServers : false;
+    if (present && !owned.has(name)) continue; // project definition wins
+    const d = servers[name];
+    (next.mcpServers ??= {})[name] = { type: d.type, command: d.command, args: d.args, url: d.url, enabled: false };
+    owned.add(name);
+  }
+  const ownedNow = [...owned].filter(name => wanted.includes(name));
+  if (JSON.stringify(next) !== before) {
+    if (next.mcpServers && !Object.keys(next.mcpServers).length && Object.keys(next).length === 1) {
+      if (cur) unlinkSync(file);
+    } else {
+      mkdirSync(join(s.folder, ".omp"), { recursive: true });
+      writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`);
+    }
+  }
+  if (JSON.stringify(ownedNow) !== JSON.stringify(r.mcpOwned)) {
+    r.mcpOwned = ownedNow;
+    saveRecipe(s);
+  }
+  clearIssue(s, "mcp-profile-invalid");
   return true;
+}
+
+// A linked session lives in a user's repository: keep orch's files out of `git status` through `.git/info/exclude`
+// (never `.gitignore`). A worktree (`.git` is a file) is skipped.
+function gitExclude(s: Session, lines: string[]) {
+  const gitDir = join(s.folder, ".git");
+  try {
+    if (!s.linked || !statSync(gitDir).isDirectory()) return;
+    const file = join(gitDir, "info", "exclude");
+    const have = existsSync(file) ? readFileSync(file, "utf8") : "";
+    const missing = lines.filter(l => !have.split("\n").includes(l));
+    if (!missing.length) return;
+    mkdirSync(join(gitDir, "info"), { recursive: true });
+    appendFileSync(file, `${have && !have.endsWith("\n") ? "\n" : ""}${missing.join("\n")}\n`);
+  } catch {}
+}
+
+// True when `.omp/mcp.json` holds nothing but servers orch wrote.
+function mcpFileIsOwned(s: Session): boolean {
+  const cur = readMcpFile(mcpFileOf(s.folder));
+  const owned = s.recipe?.mcpOwned ?? [];
+  return !!cur?.mcpServers && owned.length > 0 && Object.keys(cur).length === 1 && Object.keys(cur.mcpServers).every(k => owned.includes(k));
 }
 
 // ---------- overlay config ----------
@@ -271,6 +347,7 @@ export async function startSession(s: Session): Promise<boolean> {
   s.starting = true;
   try {
     clearIssue(s, "open-elsewhere", "session-lost", "relocation-failed", "relocation-blocked");
+    gitExclude(s, [".orch/"]);
     const mismatch = ctx.globalIssues.has("sdk-mismatch");
     let file: string | undefined;
     if (r.sessionId) {
@@ -302,6 +379,7 @@ export async function startSession(s: Session): Promise<boolean> {
       }
     }
     if (!applyMcpProfile(s)) return false;
+    if (mcpFileIsOwned(s)) gitExclude(s, [".omp/mcp.json"]);
     const overlay = writeOverlay(s);
     const args = ["omp"];
     if (r.sessionId) args.push("-r", r.sessionId);
@@ -327,6 +405,7 @@ export async function startSession(s: Session): Promise<boolean> {
       spawnedAt: Date.now(),
       spawnKind: s.kind,
       spawnParts: parts,
+      spawnRecipe: trackedFields(r, s.kind),
       spawnedWithId: r.sessionId,
       helloSeen: false,
       armPending: false,
@@ -512,10 +591,13 @@ function followCwd(s: Session, newCwd: string) {
   const inside = resolve(newCwd).startsWith(resolve(ctx.ws) + "/") || resolve(newCwd).startsWith(resolve(ctx.ws) + "\\");
   if (inside && existsSync(newCwd) && !existsSync(sessionFile(newCwd))) {
     const oldRoute = s.route;
-    const mcp = join(s.folder, ".omp", "mcp.json");
     try {
       renameSync(orchDir(s.folder), orchDir(newCwd));
-      if (s.recipe?.mcpProfileHash && existsSync(mcp) && sha(readFileSync(mcp, "utf8")) === s.recipe.mcpProfileHash) unlinkSync(mcp);
+      if (s.recipe) {
+        removeOwnedMcp(s.folder, s.recipe.mcpOwned ?? []);
+        s.recipe.mcpOwned = [];
+        writeRecipe(newCwd, s.recipe);
+      }
     } catch (e) {
       setIssue(s, "cwd-moved-in-session", "ask", `cannot follow the move: ${(e as Error).message}`, ["move-back"]);
       return;
@@ -565,14 +647,6 @@ export async function resolveIssue(s: Session, code: string, action: string): Pr
       r.sessionId = null;
       clearIssue(s, code);
       restartSession(s);
-      break;
-    case "keep-mine":
-      r.mcp = "manual";
-      clearIssue(s, code);
-      restartSession(s);
-      break;
-    case "overwrite":
-      if (applyMcpProfile(s, true)) restartSession(s);
       break;
     case "move-back":
       clearIssue(s, code);

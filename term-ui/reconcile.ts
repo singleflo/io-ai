@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildCatalog, fileHashes, ompVersion, saveCatalog } from "./catalog";
 import {
-  BLOCKING, bucketSessions, clearIssue, ctx, fingerprint, headerCwd, findSessionFile, isBlocked, newSession, observe, applyMcpProfile,
+  BLOCKING, bucketSessions, clearIssue, ctx, fingerprint, headerCwd, findSessionFile, isBlocked, newSession, observe, applyMcpProfile, trackedFields,
   restartSession, saveRecipe, setIssue, startSession, type Parts, type Session,
 } from "./core";
 import { terminateTree } from "./pty";
@@ -118,10 +118,13 @@ async function pass() {
       if (gone.length) setIssue(s, "model-missing", "flag", `not in omp catalog: ${gone.join(", ")}`, []);
       else clearIssue(s, "model-missing");
     }
-    // 5. restart-needed
-    if (s.proc && s.spawnParts && !s.restarting) {
+    // 5. restart-needed: name what differs (recipe fields, then the non-recipe inputs of the spawn)
+    if (s.proc && s.spawnParts && s.spawnRecipe && !s.restarting) {
+      const now = trackedFields(r, s.kind);
+      const changed = Object.keys(now).filter(k => now[k] !== s.spawnRecipe![k]);
       const cur = fingerprint(s);
-      const changed = (Object.keys(cur) as (keyof Parts)[]).filter(k => cur[k] !== s.spawnParts![k]);
+      const extra: [keyof Parts, string][] = [["config", "config"], ["agents", "agents"], ["skills", "skills-files"], ["mcp", "mcp"]];
+      for (const [part, label] of extra) if (cur[part] !== s.spawnParts[part] && !changed.includes(label)) changed.push(label);
       if (changed.length) setIssue(s, "restart-needed", "flag", `changed since start: ${changed.join(", ")}`, ["restart"]);
       else clearIssue(s, "restart-needed");
     }

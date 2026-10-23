@@ -41,5 +41,5 @@ term-ui delivers automatic notices starting with `[orch] … child <route>: …`
 - `no heartbeat … possibly stuck`: run `orch restart <route>` (same recipe; the conversation is preserved), then re-send the open REQ.
 - A child that does not answer a `peer_request` within its timeout: check `orch list`; if `running: false` with `desired: running`, or `hung: true`, apply the crash/hang rule above. If it is alive and `working`, wait and use `peer_status` instead of restarting.
 - `heartbeat resumed`: the child recovered by itself; no action.
-- `[orch]` notices may also report `restart-needed`, `unexpected-fork`, `open-elsewhere`, `mcp-profile-edited`, `session-lost`, and other issues as `<code> — <text>`. These need the user or a restart; NEVER resolve `ask`-level issues yourself. Tell the user.
+- `[orch]` notices may also report `restart-needed`, `unexpected-fork`, `open-elsewhere`, `mcp-profile-invalid`, `session-lost`, and other issues as `<code> — <text>`. These need the user or a restart; NEVER resolve `ask`-level issues yourself. Tell the user.
 - At most 2 automatic restarts per child per REQ. After that, stop and tell the user with the last notices and the child's state.

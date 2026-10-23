@@ -19,6 +19,17 @@ try {
       out({ free: true });
       break;
     }
+    case "leases": {
+      // true = the conversation is held by another process
+      const held: Record<string, boolean> = {};
+      for (const id of args) {
+        const handle = tryAcquireSessionLease(id);
+        held[id] = !handle;
+        handle?.release();
+      }
+      out(held);
+      break;
+    }
     case "relocate": {
       const [file, recordedCwd, newCwd] = args;
       const m = await SessionManager.openRelocated(file, recordedCwd, newCwd);
@@ -32,7 +43,7 @@ try {
       out({ dir: SessionManager.getDefaultSessionDir(args[0]) });
       break;
     default:
-      out({ error: "usage: omp-sdk lease <id> | relocate <file> <recordedCwd> <newCwd> | bucket <cwd>" }, 1);
+      out({ error: "usage: omp-sdk lease <id> | leases <id…> | relocate <file> <recordedCwd> <newCwd> | bucket <cwd>" }, 1);
   }
 } catch (e) {
   const err = e as Error;

@@ -54,7 +54,7 @@ Optional: MCP servers you already have in `~/.omp/agent/mcp.json` (ms365, chrome
 ```sh
 git clone https://github.com/singleflo/io-ai.git && cd io-ai
 cd term-ui && bun install && cd ..
-bun term-ui/server.ts          # default workspace ~/orch, port 8787
+bun term-ui/service.ts install  # user service on :8787, default workspace ~/orch (foreground alternative: bun term-ui/server.ts)
 open http://127.0.0.1:8787
 ```
 
@@ -63,6 +63,12 @@ open http://127.0.0.1:8787
 3. Children appear as cards on the right: open one, watch its state and working timer, restart it with another model, or stop the whole subtree gracefully.
 
 Environment: `ORCH_HOME` (workspace root, default `~/orch`), `PORT` (default 8787), `--workspace <path>`.
+
+Run the server as a user service so it survives closing the terminal (launchd on macOS, systemd `--user` on Linux; PATH, `ORCH_HOME` and `PORT` of the installing shell are baked in):
+
+```sh
+bun term-ui/service.ts install      # also: uninstall | status
+```
 
 ## Workspace layout
 
@@ -97,6 +103,10 @@ bun term-ui/orch.ts archive <route> [--force]             # stop + move under _a
 bun term-ui/orch.ts send <route> "text"
 bun term-ui/orch.ts resolve <route> <issue> <action>
 bun term-ui/orch.ts models [filter] · usage · catalog [--refresh]
+bun term-ui/orch.ts folder /abs/path                       # project skills, project MCP, omp conversations (live or not)
+bun term-ui/orch.ts spawn --name api --parent ops --purpose "…" --folder /abs/repo --session latest --skills a,b --start
+bun term-ui/orch.ts edit <route> --name new-name --mcp ms365 --skills all   # rename, then edit; takes effect after a restart
+bun term-ui/orch.ts archive-list · restore <archive id>
 ```
 
 Inside a root session the path is already known (`ORCH_ROUTE`), so `--parent` defaults to the root itself.
@@ -108,7 +118,8 @@ Inside a root session the path is already known (`ORCH_ROUTE`), so `--parent` de
 | `/model`, `/thinking` in a session | adopted into the recipe, revert offered |
 | omp retry fallback | ignored, shown as `in-fallback` |
 | global config / `mcp.json` edit | MCP profiles regenerated, `restart-needed` flagged (never auto-restart) |
-| hand-edited `.omp/mcp.json` | asks: keep yours (session becomes `manual`) or overwrite |
+| `.omp/mcp.json` of a project | orch merges: it adds only disabled entries for unselected user-level servers and removes only its own (`mcpOwned` in the recipe); a project's own definitions are never touched. Invalid JSON → `mcp-profile-invalid` |
+| linked repo | `.orch/` (and `.omp/mcp.json` when orch created it) are appended to `.git/info/exclude`; `.gitignore` is never touched |
 | folder moved/renamed by hand | followed: omp file relocated with `moveTo`, same session id |
 | `/move` inside a session | the session folder follows the conversation |
 | folder copied | the copy loses the id and starts a new conversation |
@@ -125,7 +136,7 @@ bun test            # (tests welcome — none yet)
 bun run ..          # see package.json scripts
 ```
 
-Layout: `server.ts` (HTTP/WS/SSE + creation) · `core.ts` (start pipeline, observer, issues) · `reconcile.ts` (convergence loop) · `catalog.ts` (omp snapshot) · `workspace.ts` (folder model) · `pty.ts` (terminals, tree termination) · `omp-sdk.ts` (lease/`moveTo` helper process) · `orch-ext.ts` (extension loaded into every session). UI strings live in `term-ui/public/i18n/*.json`; code, commits and docs are English-only (see `AGENTS.md`).
+Layout: `server.ts` (HTTP/WS/SSE + creation) · `core.ts` (start pipeline, observer, issues) · `reconcile.ts` (convergence loop) · `catalog.ts` (omp snapshot) · `workspace.ts` (folder model) · `folder.ts` (folder picker and folder-info) · `service.ts` (launchd/systemd installer) · `pty.ts` (terminals, tree termination) · `omp-sdk.ts` (lease/`moveTo` helper process) · `orch-ext.ts` (extension loaded into every session). UI strings live in `term-ui/public/i18n/*.json`; code, commits and docs are English-only (see `AGENTS.md`).
 
 Verified behaviours live in the session history of this repo's development: resume-by-id with recipe flags, hand-move while running, lease refusal, duplicate ids, global MCP changes, in-session `/move`, subtree graceful stop.
 

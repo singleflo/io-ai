@@ -19,7 +19,7 @@ export type Recipe = {
   tools?: string[] | null;
   createdBy?: string;
   createdAt?: string;
-  mcpProfileHash?: string | null;
+  mcpOwned?: string[]; // MCP server names orch wrote into `<folder>/.omp/mcp.json` (disabled user-level servers)
 };
 export type Kind = "root" | "child";
 export type Found = {
@@ -94,7 +94,7 @@ export function newRecipe(over: Partial<Recipe>): Recipe {
     previousSessionIds: [],
     desired: "running",
     createdAt: new Date().toISOString(),
-    mcpProfileHash: null,
+    mcpOwned: [],
     ...over,
   };
 }
