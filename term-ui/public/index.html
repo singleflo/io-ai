@@ -242,6 +242,8 @@
   .check:has(input:disabled) { opacity: .55; cursor: default; }
   .check:has(input:disabled):hover { background: transparent; }
   .check input:disabled { cursor: default; }
+  .check input:indeterminate { background: var(--accent); border-color: var(--accent); }
+  .check input:indeterminate::after { content: ""; width: 8px; height: 2px; border-radius: 1px; background: var(--accent-ink); }
   .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
   .path-row { display: flex; gap: 8px; }
   .path-row input { flex: 1; font-family: var(--mono); font-size: 12px; }
@@ -316,6 +318,21 @@
   #secretsForm { margin-top: 14px; }
   #secretsList .listrow { padding: 2px 8px; }
   #secretsList .picker-row { padding: 4px 0; font: 12px var(--mono); }
+  .set-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .set-bar input[type="search"] { flex: 1; min-width: 0; }
+  #settingsModels { display: flex; flex-direction: column; gap: 4px; max-height: 38vh; overflow-y: auto; }
+  #settingsModels .sel-group { margin-top: 0; }
+  #settingsModels .prov b { font-weight: 600; }
+  #settingsModels .checks { margin: 2px 0 6px 20px; }
+  .set-pick + .set-pick { margin-top: 20px; }
+  .set-pick .checks { margin-bottom: 10px; }
+  .set-pair { display: flex; gap: 8px; }
+  .set-pair select:first-child { flex: 1; min-width: 0; }
+  .set-pair select:last-child { flex: 0 0 120px; width: 120px; }
+  .root-empty { flex: 1; min-height: 0; width: 100%; max-width: 420px; margin: 0 auto; padding: 24px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; }
+  .root-empty svg.i { width: 32px; height: 32px; color: var(--accent); }
+  .root-empty h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
+  .root-empty p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; text-wrap: pretty; }
   .pick-hidden { margin-left: auto; padding-right: 4px; }
   .pick-new { display: flex; gap: 8px; padding: 6px; border-top: 1px solid var(--line); }
   .pick-new input { flex: 1; font-family: var(--mono); font-size: 12px; }
@@ -715,6 +732,35 @@
     <button class="btn primary" type="button" id="secretsSave" data-i18n="secrets.save"></button>
   </footer>
 </dialog>
+<dialog id="settingsDlg">
+  <h3 data-i18n="settings.title"></h3>
+  <p class="wiz-hint" data-i18n="settings.hint"></p>
+  <div class="wiz-body">
+    <section class="sel">
+      <h4 data-i18n="settings.modelsTitle"></h4>
+      <p class="wiz-hint" data-i18n="settings.modelsHint"></p>
+      <div class="set-bar">
+        <input id="settingsSearch" type="search" autocomplete="off" spellcheck="false" data-i18n-ph="settings.search" data-i18n-aria="settings.search">
+        <span class="mono count" id="settingsCount"></span>
+        <button class="btn ghost sm" type="button" id="settingsSelAll" data-i18n="form.selectAll"></button>
+        <button class="btn ghost sm" type="button" id="settingsSelNone" data-i18n="form.selectNone"></button>
+      </div>
+      <div id="settingsModels"></div>
+      <p class="auto-empty" id="settingsNoMatch" data-i18n="settings.noMatch" hidden></p>
+    </section>
+    <section class="sel">
+      <h4 data-i18n="settings.defaultsTitle"></h4>
+      <p class="wiz-hint" data-i18n="settings.defaultsHint"></p>
+      <div id="settingsPicks"></div>
+    </section>
+  </div>
+  <footer class="wiz-foot">
+    <span class="formerr" id="settingsErr" hidden></span>
+    <span class="spacer"></span>
+    <button class="btn ghost" type="button" id="settingsCancel" data-i18n="edit.cancel"></button>
+    <button class="btn primary" type="button" id="settingsSave" data-i18n="settings.save" disabled></button>
+  </footer>
+</dialog>
 <aside>
   <div class="brand"><svg class="i" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg><span class="brand-name">term-ui</span>
     <button class="btn icon ghost bell" id="bell" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><span class="badge" id="bellBadge" hidden></span></button></div>
@@ -741,6 +787,7 @@
     <div id="archivedlist"></div>
   </section>
   <div class="connstate"><span class="dot" id="conndot" data-h="ok"></span><span id="conntext"></span><span class="spacer"></span>
+  <button class="btn icon ghost" id="settingsBtn" type="button" data-i18n-title="settings.open" data-i18n-aria="settings.open"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
   <button class="btn icon ghost" id="secretsBtn" type="button" data-i18n-title="secrets.open" data-i18n-aria="secrets.open"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5"/></svg></button>
     <select id="lang" data-i18n-aria="lang.label"><option value="en">EN</option><option value="it">IT</option></select></div>
   </div>
@@ -750,7 +797,7 @@
 <div id="globalissues" class="issues global-issues" hidden></div>
 
 <section id="center" data-i18n-aria="aria.lead">
-  <header class="lead-head">
+  <header class="lead-head" id="leadHead">
     <div class="lead-id">
       <div class="lead-name"><span class="chip-lead"><svg class="i" viewBox="0 0 24 24"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.020 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"/><path d="M5 21h14"/></svg><span data-i18n="lead.chip"></span></span><span id="title"></span></div>
       <div class="lead-meta"><span class="pill" id="rootstate"></span><span class="pill" id="rootaw" data-h="warn" data-i18n="state.awaiting" hidden></span><span class="mono" id="rootmodel"></span><span class="mono" id="rootcost"></span></div>
@@ -759,6 +806,12 @@
     <div class="tools" id="roottools"></div>
   </header>
   <div id="rootissues" class="issues"></div>
+  <div id="rootEmpty" class="root-empty" hidden>
+    <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.020 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"/><path d="M5 21h14"/></svg>
+    <h2 data-i18n="empty.title"></h2>
+    <p data-i18n="empty.body"></p>
+    <button class="btn primary" type="button" id="emptyNewRoot" data-i18n="empty.cta"></button>
+  </div>
   <div class="termwrap" id="rootterm"></div>
 </section>
 
@@ -915,7 +968,7 @@ function paintOverlay(host, s) {
   ov.querySelector("button").onclick = e => { e.stopPropagation(); api(`/api/sessions/${enc(s.route)}/${copy[5]}`, {}).then(refresh); };
 }
 
-const toolsHtml = () => `<div class="group"><select aria-label="${t("tools.modelAria")}">${MODELS.map(m => `<option value="${m}">${m}</option>`).join("")}</select>
+const toolsHtml = () => `<div class="group"><select aria-label="${t("tools.modelAria")}"></select>
   <button class="btn" data-a="restart" title="${t("tools.restartTitle")}">${ic("restart")}${t("tools.restart")}</button></div>
   <button class="btn" data-a="toggle"></button>
   <span class="sep" aria-hidden="true"></span>
@@ -1470,7 +1523,16 @@ async function archive(route) {
 // Keep the selector on the session's current model unless the user is choosing one.
 const syncModel = (el, s) => {
   const sel = el.querySelector("select");
-  if (sel && document.activeElement !== sel && s.model) sel.value = s.model.split(":")[0];
+  if (!sel || document.activeElement === sel) return;
+  // A session on a hidden model keeps it selectable, so "Restart with model" never swaps it silently.
+  const cur = s.model?.split(":")[0];
+  const want = cur && !MODELS.includes(cur) ? [cur, ...MODELS] : MODELS;
+  const key = want.join(",");
+  if (sel.dataset.models !== key) {
+    sel.replaceChildren(...want.map(m => new Option(m, m)));
+    sel.dataset.models = key;
+  }
+  if (cur) sel.value = cur;
 };
 const paintToggle = (btn, s) => {
   const html = s.running ? `${ic("stop")}${t("tools.stop")}` : `${ic("play")}${t("tools.start")}`;
@@ -1675,6 +1737,10 @@ function render() {
   sel.replaceChildren(...rs.map(r => new Option(`${r.name} (${kids(r.route).length})`, r.route)));
   sel.value = selected ?? "";
   sel.disabled = !rs.length;
+  $("leadHead").hidden = !selected;
+  $("rootterm").hidden = !selected;
+  $("rootissues").hidden = !selected;
+  $("rootEmpty").hidden = !!selected;
   showRoot();
   if (!selected) {
     $("title").textContent = t("lead.none");
@@ -2217,6 +2283,205 @@ $("secretsBtn").onclick = () => { secretsError(); $("secretName").value = ""; $(
 $("secretsSave").onclick = () => void saveSecret();
 $("secretsForm").onsubmit = e => { e.preventDefault(); void saveSecret(); };
 $("secretsClose").onclick = () => $("secretsDlg").close();
+
+// Settings: which models are visible, and the default model / thinking / subagent roles of new sessions.
+const settingsError = text => { $("settingsErr").textContent = text ?? ""; $("settingsErr").hidden = !text; };
+const settingsJson = url => fetch(url).then(r => (r.ok ? r.json() : null)).catch(() => null);
+const providerOf = m => (m.includes("/") ? m.slice(0, m.indexOf("/")) : m);
+// "provider/model:level" -> [model, level]; the suffix counts as a level only when it is one.
+const splitLevel = v => {
+  const i = v ? v.lastIndexOf(":") : -1;
+  return i > 0 && THINKING.includes(v.slice(i + 1)) ? [v.slice(0, i), v.slice(i + 1)] : [v ?? "", ""];
+};
+const joinLevel = (model, level) => (model.value ? (level.value ? `${model.value}:${level.value}` : model.value) : null);
+const SETTINGS_PICKS = [["root", "settings.root", "settings.rootHint"], ["child", "settings.child", "settings.childHint"], ["quotaFallback", "settings.quota", "settings.quotaHint"]];
+const settingsUi = { all: [], saved: null, boxes: new Map(), groups: [], picks: {} };
+const checkedModels = () => settingsUi.all.filter(m => settingsUi.boxes.get(m)?.checked);
+
+function fillModelSelect(sel, on, cur) {
+  fillSelect(sel, [["", sel.dataset.none], ...(cur && !on.includes(cur) ? [cur, ...on] : on).map(m => [m, m])], cur);
+}
+function settingsModelsChanged() {
+  const on = checkedModels();
+  $("settingsCount").textContent = settingsUi.all.length ? t("settings.count", { n: on.length, total: settingsUi.all.length }) : "";
+  for (const pick of Object.values(settingsUi.picks)) for (const sel of [pick.model, pick.task, pick.smol]) fillModelSelect(sel, on, sel.value);
+}
+function filterSettingsModels() {
+  const q = $("settingsSearch").value.trim().toLowerCase();
+  let shown = 0;
+  for (const g of settingsUi.groups) {
+    for (const r of g.rows) r.row.hidden = !!q && !r.model.toLowerCase().includes(q);
+    g.el.hidden = g.rows.every(r => r.row.hidden);
+    if (!g.el.hidden) shown++;
+  }
+  $("settingsNoMatch").hidden = shown > 0 || !settingsUi.groups.length;
+}
+function paintSettingsModels(on) {
+  const host = $("settingsModels");
+  host.replaceChildren();
+  settingsUi.groups = [];
+  settingsUi.boxes.clear();
+  if (!settingsUi.all.length) {
+    const p = document.createElement("p");
+    p.className = "auto-empty";
+    p.textContent = t("settings.noModels");
+    host.append(p);
+  }
+  const byProvider = new Map();
+  for (const m of settingsUi.all) byProvider.set(providerOf(m), [...(byProvider.get(providerOf(m)) ?? []), m]);
+  for (const [provider, models] of byProvider) {
+    const el = document.createElement("div");
+    el.className = "sel-group";
+    const head = checkRow({ value: provider, label: provider, checked: false });
+    head.classList.add("prov");
+    head.title = t("settings.groupTitle", { provider });
+    const headBox = head.querySelector("input");
+    const count = head.querySelector("small");
+    const list = document.createElement("div");
+    list.className = "checks";
+    const rows = models.map(model => {
+      const row = checkRow({ name: "model", value: model, label: model.includes("/") ? model.slice(provider.length + 1) : model, checked: on.has(model) });
+      row.title = model;
+      list.append(row);
+      const box = row.querySelector("input");
+      settingsUi.boxes.set(model, box);
+      return { row, box, model };
+    });
+    const sync = () => {
+      const n = rows.filter(r => r.box.checked).length;
+      headBox.checked = n === rows.length;
+      headBox.indeterminate = n > 0 && n < rows.length;
+      count.textContent = `${n}/${rows.length}`;
+    };
+    headBox.onchange = () => { for (const r of rows) if (!r.row.hidden) r.box.checked = headBox.checked; sync(); settingsModelsChanged(); };
+    list.addEventListener("change", () => { sync(); settingsModelsChanged(); });
+    sync();
+    el.append(head, list);
+    host.append(el);
+    settingsUi.groups.push({ el, rows, sync });
+  }
+  filterSettingsModels();
+}
+function setVisibleModels(checked) {
+  for (const g of settingsUi.groups) {
+    for (const r of g.rows) if (!r.row.hidden) r.box.checked = checked;
+    g.sync();
+  }
+  settingsModelsChanged();
+}
+
+// One block of selects: model, thinking, subagent (task) and quick-task (smol) roles. `optional` adds the enable checkbox.
+function pickBlock(key, titleKey, hintKey, pick, on, optional) {
+  const sec = document.createElement("div");
+  sec.className = "set-pick";
+  sec.innerHTML = `<div class="sel-sub"><span class="sel-title"></span></div><p class="wiz-hint"></p>`;
+  sec.querySelector(".sel-title").textContent = t(titleKey);
+  sec.querySelector(".wiz-hint").textContent = t(hintKey);
+  const make = name => { const s = document.createElement("select"); s.id = `set-${key}-${name}`; return s; };
+  const ctl = { model: make("model"), thinking: make("thinking"), task: make("task"), taskLevel: make("task-level"), smol: make("smol"), smolLevel: make("smol-level"), enable: null };
+  ctl.model.dataset.none = t("model.default");
+  ctl.task.dataset.none = ctl.smol.dataset.none = t("settings.roleDefault");
+  ctl.taskLevel.setAttribute("aria-label", t("settings.level"));
+  ctl.smolLevel.setAttribute("aria-label", t("settings.level"));
+  const [taskModel, taskLevel] = splitLevel(pick?.task);
+  const [smolModel, smolLevel] = splitLevel(pick?.smol);
+  fillModelSelect(ctl.model, on, pick?.model ?? "");
+  fillSelect(ctl.thinking, thinkingItems(), pick?.thinking ?? "");
+  fillModelSelect(ctl.task, on, taskModel);
+  fillSelect(ctl.taskLevel, levelItems(), taskLevel);
+  fillModelSelect(ctl.smol, on, smolModel);
+  fillSelect(ctl.smolLevel, levelItems(), smolLevel);
+  const syncDisabled = () => {
+    const off = !!ctl.enable && !ctl.enable.querySelector("input").checked;
+    for (const s of [ctl.model, ctl.thinking, ctl.task, ctl.smol]) s.disabled = off;
+    ctl.taskLevel.disabled = off || !ctl.task.value;
+    ctl.smolLevel.disabled = off || !ctl.smol.value;
+  };
+  ctl.task.addEventListener("change", () => { if (!ctl.task.value) ctl.taskLevel.value = ""; syncDisabled(); });
+  ctl.smol.addEventListener("change", () => { if (!ctl.smol.value) ctl.smolLevel.value = ""; syncDisabled(); });
+  if (optional) {
+    ctl.enable = checkRow({ value: key, label: t("settings.useFallback"), checked: !!pick });
+    ctl.enable.querySelector("input").addEventListener("change", syncDisabled);
+    const one = document.createElement("div");
+    one.className = "checks one";
+    one.append(ctl.enable);
+    sec.append(one);
+  }
+  const grid = document.createElement("div");
+  grid.className = "wiz-grid";
+  const field = (labelKey, controls, wide) => {
+    const f = document.createElement("div");
+    f.className = `wiz-field${wide ? " wiz-wide" : ""}`;
+    const label = document.createElement("label");
+    label.htmlFor = controls[0].id;
+    label.textContent = t(labelKey);
+    f.append(label);
+    if (controls.length > 1) {
+      const pair = document.createElement("div");
+      pair.className = "set-pair";
+      pair.append(...controls);
+      f.append(pair);
+    } else f.append(controls[0]);
+    grid.append(f);
+  };
+  field("settings.model", [ctl.model]);
+  field("settings.thinking", [ctl.thinking]);
+  field("settings.task", [ctl.task, ctl.taskLevel], true);
+  field("settings.smol", [ctl.smol, ctl.smolLevel], true);
+  sec.append(grid);
+  syncDisabled();
+  settingsUi.picks[key] = ctl;
+  return sec;
+}
+const readPick = ctl => ({ model: ctl.model.value || null, thinking: ctl.thinking.value || null, task: joinLevel(ctl.task, ctl.taskLevel), smol: joinLevel(ctl.smol, ctl.smolLevel) });
+const levelItems = () => THINKING.map(l => [l, l || t("settings.levelNone")]);
+
+async function openSettings() {
+  settingsError();
+  $("settingsSave").disabled = true;
+  $("settingsSearch").value = "";
+  $("settingsModels").textContent = t("form.loading");
+  $("settingsPicks").replaceChildren();
+  $("settingsNoMatch").hidden = true;
+  $("settingsDlg").showModal();
+  const [cat, set] = await Promise.all([settingsJson("/api/catalog"), settingsJson("/api/settings")]);
+  if (!set) { $("settingsModels").replaceChildren(); return settingsError(t("conn.down")); }
+  settingsUi.all = cat?.allModels ?? cat?.models ?? [];
+  settingsUi.saved = set;
+  settingsUi.picks = {};
+  const on = settingsUi.all.filter(m => !set.models || set.models.includes(m));
+  paintSettingsModels(new Set(on));
+  $("settingsPicks").replaceChildren(...SETTINGS_PICKS.map(([key, title, hint]) => pickBlock(key, title, hint, key === "quotaFallback" ? set.quotaFallback : set.defaults[key], on, key === "quotaFallback")));
+  settingsModelsChanged();
+  $("settingsSave").disabled = false;
+}
+async function saveSettings() {
+  settingsError();
+  const on = checkedModels();
+  const { picks, all, saved } = settingsUi;
+  const body = {
+    // Without a catalog the model list cannot be edited: keep what is stored.
+    models: all.length ? (on.length === all.length ? null : on) : saved.models,
+    defaults: { root: readPick(picks.root), child: readPick(picks.child) },
+    quotaFallback: picks.quotaFallback.enable.querySelector("input").checked ? readPick(picks.quotaFallback) : null,
+  };
+  $("settingsSave").disabled = true;
+  const r = await api("/api/settings", body).catch(() => null);
+  $("settingsSave").disabled = false;
+  if (!r) return settingsError(t("conn.down"));
+  if (!r.ok) return settingsError(await r.text());
+  const cat = await settingsJson("/api/catalog");
+  MODELS.splice(0, MODELS.length, ...(cat?.models ?? []));
+  $("settingsDlg").close();
+  render();
+}
+$("settingsBtn").onclick = () => void openSettings();
+$("settingsSave").onclick = () => void saveSettings();
+$("settingsCancel").onclick = () => $("settingsDlg").close();
+$("settingsSearch").oninput = filterSettingsModels;
+$("settingsSelAll").onclick = () => setVisibleModels(true);
+$("settingsSelNone").onclick = () => setVisibleModels(false);
+$("emptyNewRoot").onclick = () => void openWizard("root");
 
 function wizGo(step) {
   wizStep = step;

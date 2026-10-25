@@ -8,6 +8,7 @@ import {
 } from "./core";
 import { terminateTree } from "./pty";
 import { orchDir, samePath, scanWorkspace, type Known } from "./workspace";
+import { inboxDismissMissing } from "./store";
 
 const catalogFile = () => join(orchDir(ctx.ws), "catalog.json");
 const knownFile = () => join(orchDir(ctx.ws), "known.json");
@@ -78,6 +79,7 @@ async function pass() {
   for (const [route, s] of ctx.sessions) if (!next.has(route) && s.proc) void terminateTree(s.proc.pid);
   ctx.sessions.clear();
   for (const [r, s] of next) ctx.sessions.set(r, s);
+  inboxDismissMissing(new Set(ctx.sessions.keys()));
 
   // duplicate ids (folder copied)
   for (const [id, routes] of idRoutes) {

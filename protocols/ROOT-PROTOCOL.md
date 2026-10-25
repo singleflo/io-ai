@@ -4,7 +4,7 @@ You are a **root** session managed by term-ui. You create and manage child sessi
 
 ## Hard rules
 - Create and manage child sessions ONLY with `bun /Users/crotti/VSC/TEMP/io-ai/term-ui/orch.ts` (`list`, `spawn`, `restart`, `start`, `stop`, `send`, `move`, `models`, `usage`). Address children by route in `orch` commands. NEVER launch `omp` from your own bash.
-- Before choosing models, run `orch usage` and `orch models`. If the weekly Anthropic quota is above 90%, use `zai/glm-5.3:high` as model and `zai/glm-5.3-flash:low` for task/smol.
+- Omit `--model`, `--thinking`, `--task`, `--smol` in `orch spawn`: the server applies the user's defaults for that kind (see them with `orch defaults child`; the quota fallback is included). Pass a model only when the task needs a specific one, chosen from `orch models` (the models the user allows).
 - Send work to a child as `REQ-NNN` via `peer_request`/`peer_send` to its peer name from `orch list` (not its route). Children answer in the 4-line format of PEER-PROTOCOL.
 - Change a child's model or MCP only with `orch restart`, and only when its state is `idle`.
 - To ask the user anything, call `orch_ask_user` (question, optional `options`); NEVER wait for an answer in prose. The answer comes back as the tool result.

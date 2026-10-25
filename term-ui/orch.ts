@@ -25,6 +25,7 @@ const USAGE = `usage: orch <command>
   adopt <absolute folder> [--session id]
   resolve R <code> <action>
   models [filter]
+  defaults [root|child]   # the user's default model, thinking and task/smol models for new sessions of that kind (default child)
   usage
   catalog [--refresh]
   schedule add R "<cron>" "<text>" | schedule list R | schedule rm R <id>
@@ -246,6 +247,12 @@ async function main(): Promise<void> {
       if (pos.length > 1) throw new Error(USAGE);
       const catalog = JSON.parse(await call("/api/catalog")) as Catalog;
       console.log(JSON.stringify((catalog.models ?? []).filter(model => !pos[0] || model.includes(pos[0]))));
+      break;
+    }
+    case "defaults": {
+      const kind = pos[0] ?? "child";
+      if (pos.length > 1 || (kind !== "root" && kind !== "child")) throw new Error(USAGE);
+      console.log(await call(`/api/recipe-defaults?kind=${kind}`));
       break;
     }
     case "usage":

@@ -11,7 +11,8 @@ import { FolderError, folderInfo, listDirs, makeDir } from "./folder";
 import { assertPtySupported, terminateTree } from "./pty";
 import { orphans, reconcile, refreshCatalog } from "./reconcile";
 import { ensureToken, cookieValue, tokenMatches } from "./token";
-import { inboxCounts, inboxDecide, inboxList, onInboxChange, openStore, type InboxItem } from "./store";
+import { inboxCounts, inboxDecide, inboxList, inboxRenameRoutes, logEvent, onInboxChange, openStore, type InboxItem } from "./store";
+import { loadSettings, saveSettings, validateSettings, visibleModels } from "./settings";
 import { auditRequest, coreRoute, digestTick } from "./core-api";
 import { renameScrollback } from "./scrollback";
 import { NAME_RE, newRecipe, orchDir, peerOf, readRecipe, samePath, scanWorkspace, sessionFile, writeRecipe, type Recipe } from "./workspace";
@@ -170,7 +171,7 @@ async function createSession(b: CreateBody): Promise<Response> {
   if (b.preset && !loaded) return bad("unknown preset");
   const filled = loaded ? presetFields(loaded.preset, ctx.catalog?.mcpServers ? Object.keys(ctx.catalog.mcpServers) : null) : undefined;
   const kind = b.parent ? "child" : "root";
-  const defaults = ctx.catalog ? recipeDefaults(ctx.catalog, kind) : {};
+  const defaults = ctx.catalog ? recipeDefaults(ctx.catalog, kind, loadSettings()) : {};
   const bodyFields = Object.fromEntries(RECIPE_KEYS.filter(k => b[k] !== undefined).map(k => [k, b[k]]));
   // resume: the project's recipe stays; only fields present in the body overwrite it
   // otherwise precedence: catalog defaults < preset < what the body set
@@ -204,7 +205,7 @@ function adopt(folder: string, sessionId: string | undefined): Response {
   if (rel.startsWith("..") || isAbsolute(rel) || rel === "") return bad("folder must be inside the workspace");
   if (existsSync(join(folder, ".orch", "session.json"))) return bad("folder is already a session");
   const parentKind = scanWorkspace(ctx.ws).some(f => resolve(folder).startsWith(`${resolve(f.folder)}/`)) ? "child" : "root";
-  const defaults = ctx.catalog ? recipeDefaults(ctx.catalog, parentKind) : {};
+  const defaults = ctx.catalog ? recipeDefaults(ctx.catalog, parentKind, loadSettings()) : {};
   writeRecipe(folder, newRecipe({ ...defaults, sessionId: sessionId ?? null, desired: "stopped", createdBy: "adopt" }));
   return json({ ok: true });
 }
@@ -244,6 +245,7 @@ async function moveSubtree(s: Session, to: string): Promise<Response> {
     flushScrollback(x);
     renameScrollback(ctx.ws, x.route, to + x.route.slice(s.route.length));
   }
+  inboxRenameRoutes(s.route, to);
   renameSync(ownDir(s), target);
   // desired states come back from the recipe files on rescan (parking only changed memory)
   await reconcile();
@@ -379,11 +381,19 @@ Bun.serve<{ route: string }, {}>({
             await refreshCatalog();
             await reconcile();
           }
-          return json(ctx.catalog);
+          return ctx.catalog ? json({ ...ctx.catalog, models: visibleModels(ctx.catalog.models, loadSettings()), allModels: ctx.catalog.models }) : json(ctx.catalog);
         case "global-issues":
           return json(globalIssues());
         case "recipe-defaults":
-          return ctx.catalog ? json(recipeDefaults(ctx.catalog, url.searchParams.get("kind") === "child" ? "child" : "root")) : bad("catalog not ready", 503);
+          return ctx.catalog ? json(recipeDefaults(ctx.catalog, url.searchParams.get("kind") === "child" ? "child" : "root", loadSettings())) : bad("catalog not ready", 503);
+        case "settings": {
+          if (req.method !== "POST") return json(loadSettings());
+          const next = validateSettings(await req.json().catch(() => null), ctx.catalog?.models ?? null);
+          if (typeof next === "string") return bad(next);
+          saveSettings(next);
+          logEvent("", "settings", {});
+          return json(next);
+        }
         case "usage":
           return new Response(await cli(["omp", "usage", "--json"]), { headers: { "content-type": "application/json" } });
         case "orphans": {

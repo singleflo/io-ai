@@ -173,6 +173,28 @@ export function inboxDecide(id: number, status: Exclude<InboxStatus, "open">, an
   return item;
 }
 
+// Open items of routes that no longer exist are dismissed (route "" = workspace-wide, e.g. the digest, is kept).
+export function inboxDismissMissing(routes: Set<string>): number {
+  const rows = db().query("SELECT id, route FROM inbox WHERE status = 'open' AND route <> ''").all() as { id: number; route: string }[];
+  let n = 0;
+  for (const r of rows) if (!routes.has(r.route) && inboxDecide(r.id, "dismissed")) n++;
+  return n;
+}
+
+// Moves open and closed items, and the route references in their data, from `from` (and its subtree) to `to`.
+export function inboxRenameRoutes(from: string, to: string): void {
+  const like = `${from.replace(/[\\%_]/g, "\\$&")}/%`;
+  const affected = db().query("SELECT id FROM inbox WHERE route = ? OR route LIKE ? ESCAPE '\\' ORDER BY id DESC").all(from, like) as { id: number }[];
+  db().query("UPDATE inbox SET route = ? || substr(route, length(?) + 1) WHERE route = ? OR route LIKE ? ESCAPE '\\'").run(to, from, from, like);
+  // route references inside `data`: same prefix rewrite where they match
+  for (const key of ["route", "child", "root"]) {
+    db().query(`UPDATE inbox SET data = json_set(data, '$.${key}', ? || substr(json_extract(data, '$.${key}'), length(?) + 1))
+      WHERE json_valid(data) AND json_type(data, '$.${key}') = 'text' AND (json_extract(data, '$.${key}') = ? OR json_extract(data, '$.${key}') LIKE ? ESCAPE '\\')`).run(to, from, from, like);
+  }
+  const open = affected.map(a => inboxGet(a.id)).find(i => i?.status === "open");
+  if (open) emitInbox(open, "update");
+}
+
 // ---------- REQ register ----------
 export function reqOpen(a: { root: string; num: string; child: string; title: string; body: string }): Req {
   const key = `${a.root}#${a.num}`;

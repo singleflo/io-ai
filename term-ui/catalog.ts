@@ -4,6 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { Recipe, Roles } from "./workspace";
 import { workspaceRoot } from "./workspace";
+import type { Settings } from "./settings";
 import { SDK_BUN } from "./core";
 import { existsSync, readdirSync } from "node:fs";
 
@@ -119,12 +120,14 @@ function workspaceSkills(): { name: string; role: string }[] {
 
 export const saveCatalog = (file: string, c: Catalog) => writeFileSync(file, `${JSON.stringify(c, null, 2)}\n`);
 
-// Deterministic default recipe from the catalog.
-export function recipeDefaults(c: Catalog, kind: "root" | "child"): Partial<Recipe> {
+// Default recipe from the catalog and the user's settings.
+export function recipeDefaults(c: Catalog, kind: "root" | "child", s: Settings): Partial<Recipe> {
   const quotaTight = (c.usage?.anthropic7dUsedFraction ?? 0) > 0.9;
   const base: Partial<Recipe> = kind === "root" ? { mcp: "all", compactPercent: null } : { mcp: [], compactPercent: 55 };
-  if (quotaTight) return { ...base, model: "zai/glm-5.3", thinking: "high", roles: { task: "zai/glm-5.3-flash:low", smol: "zai/glm-5.3-flash:low" } };
-  const def = c.modelRoles?.default;
-  const [model, level] = def ? def.split(":") : [undefined, undefined];
-  return { ...base, model, thinking: level, roles: null };
+  const pick = quotaTight && s.quotaFallback ? s.quotaFallback : s.defaults[kind];
+  const [defModel, defLevel] = c.modelRoles?.default?.split(":") ?? [];
+  const model = pick.model ?? defModel;
+  const thinking = pick.thinking ?? (pick.model ? undefined : defLevel);
+  const roles = pick.task || pick.smol ? { ...(pick.task ? { task: pick.task } : {}), ...(pick.smol ? { smol: pick.smol } : {}) } : null;
+  return { ...base, model, thinking, roles };
 }
