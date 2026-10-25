@@ -2485,7 +2485,8 @@ $("emptyNewRoot").onclick = () => void openWizard("root");
 
 function wizGo(step) {
   wizStep = step;
-  for (const sec of document.querySelectorAll("#wizForm section")) sec.hidden = Number(sec.dataset.w) !== step;
+  // only the step sections: the tool groups inside step 2 are <section>s too and must keep their own visibility
+  for (const sec of document.querySelectorAll("#wizForm section[data-w]")) sec.hidden = Number(sec.dataset.w) !== step;
   for (const dot of document.querySelectorAll(".step")) dot.classList.toggle("on", Number(dot.dataset.s) <= step);
   $("wizBack").hidden = step === 1;
   $("wizNext").hidden = step === 2;
