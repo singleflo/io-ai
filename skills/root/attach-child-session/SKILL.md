@@ -17,4 +17,4 @@ description: Use when asked to link an existing folder (and an already-started o
 4. `$ORCH start <route>` (the output JSON of attach contains `route`). If it reports `open-elsewhere`, the conversation is live somewhere else: do NOT force it, tell the user.
 5. Introduce yourself once with `peer_request` (REQ with its "How to reply" block, see ROOT-PROTOCOL) and record the child's `peer` name from `orch list`.
 
-The workspace keeps only a link: moving or archiving it never touches the real folder. The recipe (`model`, `mcp`, …) lives in the target folder as `.orch/session.json` and can be edited with `orch edit`.
+The workspace holds the child's recipe, its own `AGENTS.md` (mission, boundaries) and its outbox in its session folder (`dir` in `orch list`); the attached folder only gets disabled MCP entries in its `.omp/mcp.json`. Several children may attach the same folder (e.g. a developer and a reviewer of /Users/crotti/VSC/ODOO18): write each one's mission in its own `<dir>/AGENTS.md`, never in the attached folder's `AGENTS.md`.

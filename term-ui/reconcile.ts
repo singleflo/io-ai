@@ -7,8 +7,8 @@ import {
   restartSession, saveRecipe, setIssue, startSession, type Parts, type Session,
 } from "./core";
 import { terminateTree } from "./pty";
-import { orchDir, samePath, scanWorkspace, type Known } from "./workspace";
-import { inboxDismissMissing } from "./store";
+import { migrateLegacyLinks, orchDir, samePath, scanWorkspace, type Known } from "./workspace";
+import { inboxDismissMissing, logEvent } from "./store";
 
 const catalogFile = () => join(orchDir(ctx.ws), "catalog.json");
 const knownFile = () => join(orchDir(ctx.ws), "known.json");
@@ -53,6 +53,10 @@ async function pass() {
   }
 
   // 2. scan
+  for (const line of migrateLegacyLinks(ctx.ws)) {
+    console.log(line);
+    logEvent("", "migration", { text: line });
+  }
   const found = scanWorkspace(ctx.ws);
   const next = new Map<string, Session>();
   const idRoutes = new Map<string, string[]>();
@@ -60,17 +64,17 @@ async function pass() {
     const old = ctx.sessions.get(f.route) ?? [...ctx.sessions.values()].find(o => o.recipe?.sessionId && o.recipe.sessionId === f.recipe?.sessionId && !found.some(x => x.route === o.route));
     const s = old ?? newSession(f);
     const movedFrom = old && old.route !== f.route ? old.route : undefined;
-    Object.assign(s, { linked: undefined, linkDir: undefined, recipeError: undefined }, f); // optional fields absent from the scan must not keep old values (a relocated session stops being linked)
+    Object.assign(s, { recipeError: undefined, folderMissing: undefined }, f); // optional fields absent from the scan must not keep old values
     if (movedFrom && s.proc) {
       // folder moved by hand while running: stop, the next start relocates the omp file
       s.restarting = true;
       void terminateTree(s.proc.pid);
     }
-    // a link whose target folder is gone is not an invalid recipe: the user relinks it or archives the link
-    const linkBroken = !!f.recipeError?.startsWith("link target missing");
+    // a missing working folder (or an unmigrated link to a missing target) is not an invalid recipe: the user relinks it or archives the session
+    const linkBroken = !!f.folderMissing || !!f.recipeError?.startsWith("link target missing");
     if (f.recipeError && !linkBroken) setIssue(s, "recipe-invalid", "flag", f.recipeError, []);
     else clearIssue(s, "recipe-invalid");
-    if (linkBroken) setIssue(s, "link-broken", "ask", f.recipeError!, ["relink", "archive"]);
+    if (linkBroken) setIssue(s, "link-broken", "ask", f.folderMissing ? `folder missing: ${f.folder}` : f.recipeError!, ["relink", "archive"]);
     else clearIssue(s, "link-broken");
     next.set(f.route, s);
     const id = f.recipe?.sessionId;
@@ -144,6 +148,12 @@ async function pass() {
     if (unmanagedEpoch !== catalogEpoch) {
       const files = await bucketSessions(s.folder);
       const known2 = new Set([r.sessionId, ...r.previousSessionIds]);
+      // conversations owned by any other managed session never count as foreign (sharers of a folder)
+      for (const o of ctx.sessions.values()) {
+        if (o === s || !o.recipe) continue;
+        if (o.recipe.sessionId) known2.add(o.recipe.sessionId);
+        for (const id of o.recipe.previousSessionIds) known2.add(id);
+      }
       // Pre-existing omp sessions in the folder (e.g. a live one) are never offered for adoption.
       const since = Date.parse(r.createdAt ?? "") || 0;
       const extra = files.filter(f => !known2.has(f.id) && f.birthMs > since);

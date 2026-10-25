@@ -3,7 +3,7 @@ import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, 
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { bucketSessions, ctx, findSessionFile, heldLeases } from "./core";
-import { linkFile, readRecipe, samePath, sessionFile } from "./workspace";
+import { readRecipe, samePath, sessionFile } from "./workspace";
 
 export class FolderError extends Error {
   constructor(message: string, readonly status = 400) {
@@ -34,7 +34,7 @@ export function listDirs(dirParam: string | null, hidden = false): { dir: string
     if (!hidden && e.name.startsWith(".")) continue;
     const path = join(dir, e.name);
     if (!(e.isDirectory() || (e.isSymbolicLink() && isDir(path)))) continue;
-    entries.push({ name: e.name, path, isSession: existsSync(sessionFile(path)) || existsSync(linkFile(path)), isGit: existsSync(join(path, ".git")) });
+    entries.push({ name: e.name, path, isSession: existsSync(sessionFile(path)), isGit: existsSync(join(path, ".git")) });
   }
   entries.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
   return { dir, parent: dirname(dir) === dir ? null : dirname(dir), entries };
@@ -138,13 +138,11 @@ function projectMcp(folder: string, owned: Set<string>, errors: string[]): { nam
   return [...out.values()];
 }
 
-export type Conversation = { id: string; title: string | null; modified: string; model: string | null; live: boolean };
+export type Conversation = { id: string; title: string | null; modified: string; model: string | null; live: boolean; owner: string | null };
 
 export type ExistingWarning = "conversation-live" | "conversation-missing" | "model-unavailable" | "desired-running" | "mcp-owned";
 
 export type ExistingSession = {
-  state: "orphan" | "managed";
-  route: string | null;
   sessionId: string | null;
   model: string | null;
   thinking: string | null;
@@ -158,7 +156,7 @@ export type ExistingSession = {
   warnings: ExistingWarning[];
 };
 
-// The recipe already stored in `folder/.orch/session.json`: "managed" when a live session uses the folder, else an "orphan" that can be resumed.
+// A recipe left in `folder/.orch/session.json` by an older orch version: it can be resumed into a new session.
 async function existingSession(folder: string, errors: string[]): Promise<ExistingSession | null> {
   if (!existsSync(sessionFile(folder))) return null;
   const { recipe, error } = readRecipe(folder);
@@ -166,20 +164,16 @@ async function existingSession(folder: string, errors: string[]): Promise<Existi
     errors.push(`session.json: ${error}`);
     return null;
   }
-  const owner = [...ctx.sessions.values()].find(s => samePath(s.folder, folder));
   const warnings: ExistingWarning[] = [];
   if (recipe.sessionId) {
     if (!findSessionFile(recipe.sessionId)) warnings.push("conversation-missing");
-    // a managed session's own omp process holds the lease: that is not "another" process
-    if (!owner && (await heldLeases([recipe.sessionId]))[recipe.sessionId]) warnings.push("conversation-live");
+    if ((await heldLeases([recipe.sessionId]))[recipe.sessionId]) warnings.push("conversation-live");
   }
   const models = ctx.catalog?.models;
   if (recipe.model && models && !models.includes(recipe.model.split(":")[0])) warnings.push("model-unavailable");
   if (recipe.desired === "running") warnings.push("desired-running");
   if (recipe.mcpOwned?.length) warnings.push("mcp-owned");
   return {
-    state: owner ? "managed" : "orphan",
-    route: owner?.route ?? null,
     sessionId: recipe.sessionId ?? null,
     model: recipe.model ?? null,
     thinking: recipe.thinking ?? null,
@@ -205,15 +199,19 @@ export async function folderInfo(folderParam: string, route: string | null) {
     } catch (e) {
       errors.push(`${f.id}: ${(e as Error).message}`);
     }
-    return { id: f.id, ...meta, modified: statSync(f.path).mtime.toISOString(), live: held[f.id] === true };
+    const owner = [...ctx.sessions.values()].find(x => x.recipe?.sessionId === f.id)?.route ?? null;
+    return { id: f.id, ...meta, modified: statSync(f.path).mtime.toISOString(), live: held[f.id] === true, owner };
   });
-  const owned = new Set(route ? ctx.sessions.get(route)?.recipe?.mcpOwned ?? [] : []);
+  const users = [...ctx.sessions.values()].filter(x => samePath(x.folder, folder));
+  // entries orch wrote for any session on this folder are not the project's own servers
+  const owned = new Set(users.flatMap(x => x.recipe?.mcpOwned ?? []));
   return {
     existing: await existingSession(folder, errors),
     folder,
     isGit: existsSync(join(folder, ".git")),
     hasAgentsMd: existsSync(join(folder, "AGENTS.md")),
-    isSession: existsSync(sessionFile(folder)) || existsSync(linkFile(folder)),
+    isSession: existsSync(sessionFile(folder)),
+    sharedWith: users.filter(x => x.linked && x.route !== route).map(x => x.route),
     conversations,
     projectSkills: projectSkills(folder),
     projectMcp: projectMcp(folder, owned, errors),

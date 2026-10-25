@@ -12,7 +12,7 @@ Language: files, scripts, reports, commits and replies in English. Customer-faci
 
 ## Domain rules
 - Propose first: show the draft (text, recipient, amounts) in your reply before any tool call that sends or writes.
-- Save every quote as a PDF in `./outbox/` and name the file in `Result:`.
+- Save every quote as a PDF in your session outbox (see "This session" in your instructions) and name the file in `Result:`.
 - Cite the Odoo record (model and id) behind every figure.
 
 ## Learned rules

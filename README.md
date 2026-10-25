@@ -87,7 +87,7 @@ bun term-ui/service.ts install      # also: uninstall | status
     secrets.json               secret values by name (mode 0600, never returned by the API)
     presets/<role>/            role presets overriding the repo's presets/ (preset.json + AGENTS.md)
   root-test/                   a root session   → route "root-test"
-    .orch/session.json         the recipe (id, model, mcp, skills, desired)
+    .orch/session.json         the recipe (id, model, mcp, skills, desired; `folder` = attached project folder)
     AGENTS.md                  domain rules; inherited by children
     mail/                      a child session  → route "root-test/mail"
   _archive/                    archived subtrees (nothing is ever deleted)
@@ -131,8 +131,9 @@ Inside a root session the path is already known (`ORCH_ROUTE`), so `--parent` de
 | `/model`, `/thinking` in a session | adopted into the recipe, revert offered |
 | omp retry fallback | ignored, shown as `in-fallback` |
 | global config / `mcp.json` edit | MCP profiles regenerated, `restart-needed` flagged (never auto-restart) |
-| `.omp/mcp.json` of a project | orch merges: it adds only disabled entries for unselected user-level servers and removes only its own (`mcpOwned` in the recipe); a project's own definitions are never touched. Invalid JSON → `mcp-profile-invalid` |
-| linked repo | `.orch/` (and `.omp/mcp.json` when orch created it) are appended to `.git/info/exclude`; `.gitignore` is never touched |
+| `.omp/mcp.json` of a project | orch merges: it adds only disabled entries for user-level servers that no session on that folder selects (the union of the sharers) and removes only its own (`mcpOwned` in the recipes); a project's own definitions are never touched. Invalid JSON → `mcp-profile-invalid` |
+| attached folder (linked session) | orch writes nothing there except those disabled MCP entries (`.omp/mcp.json` is appended to `.git/info/exclude` when orch created it); the recipe, `AGENTS.md`, outbox and prompt live in the session's workspace folder (`recipe.folder` is the working folder) |
+| several sessions on one folder | allowed: `sharedWith` in `orch list`, a "shared folder" label on the cards, and a `shared-folder-busy` issue plus a root notice when two of them work at once |
 | folder moved/renamed by hand | followed: omp file relocated with `moveTo`, same session id |
 | `/move` inside a session | the session folder follows the conversation |
 | folder copied | the copy loses the id and starts a new conversation |

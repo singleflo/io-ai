@@ -1,7 +1,7 @@
 // Workspace model: a session is a folder containing `.orch/session.json`; routes are relative folder paths.
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, relative, sep } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 export type Roles = { default?: string; task?: string; smol?: string; plan?: string; slow?: string };
 export type Schedule = { id: string; cron: string; text: string; enabled: boolean };
@@ -27,14 +27,16 @@ export type Recipe = {
   createdBy?: string;
   createdAt?: string;
   mcpOwned?: string[]; // MCP server names orch wrote into `<folder>/.omp/mcp.json` (disabled user-level servers)
+  folder?: string; // working folder: absolute path outside the workspace; absent = the session's own workspace dir
 };
 export type Kind = "root" | "child";
 export type Found = {
   route: string;
   name: string;
-  folder: string;
-  linked?: boolean; // folder is reached through a workspace link (.orch/link.json); linkDir is the route's own directory
-  linkDir?: string;
+  folder: string; // the cwd: `recipe.folder` when linked, else `dir`
+  dir: string; // the session's workspace directory (holds `.orch/session.json`)
+  linked: boolean; // `recipe.folder` is set (or a legacy link is pending migration)
+  folderMissing?: boolean; // linked folder does not exist
   parent: string | null;
   kind: Kind;
   depth: number;
@@ -79,14 +81,16 @@ export function samePath(a: string, b: string): boolean {
   return norm(a) === norm(b);
 }
 
-export function readRecipe(folder: string): { recipe: Recipe | null; error?: string } {
+function parseRecipe(file: string): { recipe: Recipe | null; error?: string } {
   try {
-    const raw = JSON.parse(readFileSync(sessionFile(folder), "utf8")) as Recipe;
+    const raw = JSON.parse(readFileSync(file, "utf8")) as Recipe;
     return { recipe: { ...raw, previousSessionIds: raw.previousSessionIds ?? [] } };
   } catch (e) {
     return { recipe: null, error: (e as Error).message };
   }
 }
+
+export const readRecipe = (folder: string) => parseRecipe(sessionFile(folder));
 
 export function writeRecipe(folder: string, recipe: Recipe) {
   mkdirSync(join(folder, ".orch"), { recursive: true });
@@ -107,7 +111,14 @@ export function newRecipe(over: Partial<Recipe>): Recipe {
   };
 }
 
-// Recursive scan. Skips dot/underscore dirs, node_modules and symlinks; a session folder's children are scanned too.
+// True when `folder` is an absolute path that is neither the workspace nor inside it.
+const outsideOf = (ws: string, folder: string) => {
+  if (!isAbsolute(folder)) return false;
+  const rel = relative(ws, folder);
+  return rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel);
+};
+
+// Recursive scan. Skips dot/underscore dirs, node_modules and symlinks; a session's children are scanned too.
 export function scanWorkspace(ws: string): Found[] {
   const found: Found[] = [];
   const walk = (dir: string, parent: string | null, depth: number) => {
@@ -121,17 +132,24 @@ export function scanWorkspace(ws: string): Found[] {
       if (!e.isDirectory() || e.isSymbolicLink()) continue;
       if (e.name.startsWith(".") || e.name.startsWith("_") || e.name === "node_modules") continue;
       const dir2 = join(dir, e.name);
-      const target = readLink(dir2); // a link registers an external folder as the session's folder
-      if (target !== undefined) {
-        const folder = existsSync(target) ? target : dir2;
-        const { recipe, error } = existsSync(target) ? readRecipe(folder) : { recipe: null, error: `link target missing: ${target}` };
-        const route = toRoute(ws, dir2);
-        found.push({ route, name: e.name, folder, linked: true, linkDir: dir2, parent, kind: parent ? "child" : "root", depth, recipe, recipeError: error });
-        // children of a linked session are links placed under the link directory; the target tree is not scanned
-      } else if (existsSync(sessionFile(dir2))) {
-        const { recipe, error } = readRecipe(dir2);
-        const route = toRoute(ws, dir2);
-        found.push({ route, name: e.name, folder: dir2, parent, kind: parent ? "child" : "root", depth, recipe, recipeError: error });
+      const route = toRoute(ws, dir2);
+      const kind: Kind = parent ? "child" : "root";
+      if (existsSync(sessionFile(dir2))) {
+        const read = readRecipe(dir2);
+        let { recipe } = read;
+        let error = read.error;
+        const wanted = recipe?.folder;
+        if (recipe && wanted !== undefined && (typeof wanted !== "string" || !isAbsolute(wanted) || !outsideOf(ws, wanted))) {
+          recipe = null;
+          error = "recipe folder must be an absolute path outside the workspace";
+        }
+        const linked = !!recipe?.folder;
+        const folder = recipe?.folder ?? dir2;
+        found.push({ route, name: e.name, folder, dir: dir2, linked, folderMissing: linked && !existsSync(folder) ? true : undefined, parent, kind, depth, recipe, recipeError: error });
+        walk(dir2, route, depth + 1);
+      } else if (readLink(dir2) !== undefined) {
+        // legacy link not migrated yet (its recipe is missing): reported as a broken link
+        found.push({ route, name: e.name, folder: dir2, dir: dir2, linked: true, parent, kind, depth, recipe: null, recipeError: `link target missing: ${readLink(dir2)}` });
         walk(dir2, route, depth + 1);
       } else {
         walk(dir2, parent, depth);
@@ -140,4 +158,68 @@ export function scanWorkspace(ws: string): Found[] {
   };
   walk(ws, null, 0);
   return found;
+}
+
+// Moves legacy recipes (`link.json` + `<target>/.orch/session.json`, or the archived `.orch/project/`) into the session's own dir
+// as `recipe.folder`. The source is deleted only after the destination was written. Returns one log line per event.
+export function migrateLegacyLinks(ws: string): string[] {
+  const log: string[] = [];
+  const walk = (dir: string) => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (!e.isDirectory() || e.isSymbolicLink()) continue;
+      if (e.name.startsWith(".") || e.name.startsWith("_") || e.name === "node_modules") continue;
+      const dir2 = join(dir, e.name);
+      const target = readLink(dir2);
+      if (target !== undefined) migrateOne(dir2, target, log);
+      walk(dir2);
+    }
+  };
+  walk(ws);
+  return log;
+}
+
+function migrateOne(dir: string, target: string, log: string[]) {
+  const projectDir = join(dir, ".orch", "project");
+  const targetOrch = join(target, ".orch");
+  const archived = existsSync(join(projectDir, "session.json"));
+  const sourceDir = archived ? projectDir : targetOrch;
+  const hasSource = archived || (existsSync(target) && existsSync(join(targetOrch, "session.json")));
+  const ownExists = existsSync(sessionFile(dir));
+  const own = ownExists ? readRecipe(dir).recipe : null;
+  if (ownExists && !(own?.folder && samePath(own.folder, target))) return; // the session already has a recipe of its own: the link is stale, not ours to convert
+  if (!ownExists) {
+    if (!hasSource) return; // the scan reports it as broken
+    const { recipe, error } = parseRecipe(join(sourceDir, "session.json"));
+    if (!recipe) {
+      log.push(`legacy link ${dir}: ${error}`);
+      return;
+    }
+    recipe.folder = resolve(target);
+    try {
+      writeRecipe(dir, recipe);
+    } catch (e) {
+      log.push(`legacy link ${dir}: ${(e as Error).message}`); // the source stays in place
+      return;
+    }
+  }
+  // an earlier run that died after writing the recipe (`own` has a folder) only finishes the cleanup below
+  try {
+    if (hasSource) {
+      rmSync(join(sourceDir, "session.json"), { force: true });
+      rmSync(join(sourceDir, "config.yml"), { force: true });
+      if (archived) rmSync(projectDir, { recursive: true, force: true });
+      else if (readdirSync(targetOrch).length === 0) rmdirSync(targetOrch);
+    }
+    rmSync(linkFile(dir), { force: true });
+  } catch (e) {
+    log.push(`legacy link ${dir}: cleanup failed: ${(e as Error).message}`);
+    return;
+  }
+  log.push(`migrated ${dir} → folder ${target}`);
 }

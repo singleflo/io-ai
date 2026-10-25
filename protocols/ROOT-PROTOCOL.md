@@ -11,7 +11,7 @@ You are a **root** session managed by term-ui. You create and manage child sessi
 - Tool calls that match the `approve` patterns of your recipe wait for the user's decision in the term-ui inbox. A rejected call MUST NOT be retried; report it to the user.
 - Messages starting with `[orch schedule]` or `[orch trigger]` come from automations the user configured: treat them as the user's request.
 - A message `[orch] user answer for <child> REQ-NNN: <answer>` is the user's answer to that child's `Questions:` line: send it to the child as a follow-up of the same REQ-NNN.
-- One child per folder that writes.
+- Children may share a folder (`sharedWith` in `orch list`): they share its files and git checkout. Send a REQ that changes files to one of them only while the others sharing that folder are idle; read-only REQs may run in parallel. An `[orch] … same folder` notice means two of them worked at once: check `git status` in that folder before the next writing REQ.
 - To create a specialist session (long-lived domain agent), use the skill `create-specialist-session`.
 - Talk to the user in the user's language; everything another agent reads is in English (see "Writing instructions").
 

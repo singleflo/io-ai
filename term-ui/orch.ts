@@ -21,7 +21,7 @@ const USAGE = `usage: orch <command>
   archive-list
   restore <archive id>
   folder <absolute folder>   # project skills, project MCP and omp conversations of a folder
-  attach <absolute folder> [--parent R] [--name N] [--session id|latest|new | --resume] [--start]   # without --session: list conversations; with it: link the folder as a child; --resume links the folder's existing recipe (orphan session)
+  attach <absolute folder> [--parent R] [--name N] [--session id|latest|new | --resume] [--start]   # without --session: list conversations (owner = the session using one) and the sessions sharing the folder; with it: attach the folder to a child (several children may share a folder); latest = newest free conversation; --resume brings in a recipe left in the folder by an older orch version
   adopt <absolute folder> [--session id]
   resolve R <code> <action>
   models [filter]
@@ -31,7 +31,7 @@ const USAGE = `usage: orch <command>
   schedule add R "<cron>" "<text>" | schedule list R | schedule rm R <id>
   trigger add R <name> "<template with {{body}}>" | trigger list R | trigger rm R <id>   # add prints the webhook URL
   secret set <NAME> (value on stdin) | secret rm <NAME>
-  relocate R <absolute folder> | relocate R --workspace [--new-conversation]   # change a session's folder; --workspace moves a linked session into the workspace
+  relocate R <absolute folder> | relocate R --workspace [--new-conversation]   # change a session's folder; --workspace brings a linked session back to its own workspace folder
   spawn ... [--preset coding|sales|support]   # role preset fills purpose, MCP, tools, env, approvals and schedules
   restart/edit/spawn accept --tools a,b|all (allowed built-in tools) and --approve a,b|none`;
 
@@ -44,6 +44,9 @@ type SessionView = {
   desired: string;
   model: string;
   issues: { code: string }[];
+  folder: string;
+  dir: string;
+  sharedWith: string[];
 };
 
 type Catalog = { models: string[] | null };
@@ -141,8 +144,8 @@ async function main(): Promise<void> {
       break;
     case "list": {
       const sessions = JSON.parse(await call("/api/sessions")) as SessionView[];
-      console.log(JSON.stringify(sessions.map(({ route, kind, state, peer, running, desired, model, issues }) => ({
-        route, kind, state, peer, running, desired, model, issues: issues.map(issue => issue.code),
+      console.log(JSON.stringify(sessions.map(({ route, kind, state, peer, running, desired, model, issues, folder, dir, sharedWith }) => ({
+        route, kind, state, peer, running, desired, model, issues: issues.map(issue => issue.code), folder, dir, sharedWith,
       }))));
       break;
     }
@@ -212,8 +215,8 @@ async function main(): Promise<void> {
       const session = flag("session");
       const resume = flags.resume === true;
       if (!session && !resume) {
-        const info = JSON.parse(await call(`/api/folder-info?folder=${encodeURIComponent(folder)}`)) as { conversations: unknown[] };
-        console.log(JSON.stringify(info.conversations.length ? { conversations: info.conversations } : { conversations: [], hint: "no omp conversation in that folder yet: attach again with --session new" }));
+        const info = JSON.parse(await call(`/api/folder-info?folder=${encodeURIComponent(folder)}`)) as { conversations: unknown[]; sharedWith: string[] };
+        console.log(JSON.stringify(info.conversations.length ? { conversations: info.conversations, sharedWith: info.sharedWith } : { conversations: [], sharedWith: info.sharedWith, hint: "no omp conversation in that folder yet: attach again with --session new" }));
         break;
       }
       console.log(await call("/api/sessions", {

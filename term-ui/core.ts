@@ -65,7 +65,7 @@ export const hooks = { reconcile: () => {} };
 
 const SCROLLBACK_MAX = 256 * 1024;
 const BEAT_TIMEOUT_MS = 60_000;
-export const BLOCKING = new Set(["session-lost", "relocation-failed", "relocation-blocked", "mcp-profile-invalid", "recipe-invalid", "duplicate-id", "unexpected-fork"]);
+export const BLOCKING = new Set(["session-lost", "relocation-failed", "relocation-blocked", "mcp-profile-invalid", "recipe-invalid", "duplicate-id", "unexpected-fork", "link-broken"]);
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 const base = (m?: string | null) => (m ?? "").split(":")[0];
 
@@ -173,7 +173,11 @@ export async function heldLeases(ids: string[]): Promise<Record<string, boolean>
 }
 
 // ---------- recipe persistence ----------
-export const saveRecipe = (s: Session) => s.recipe && writeRecipe(s.folder, s.recipe);
+export const saveRecipe = (s: Session) => s.recipe && writeRecipe(s.dir, s.recipe);
+
+// Routes of the OTHER sessions attached to the same folder (`[]` when this one runs in its own dir).
+export const sharedWith = (s: Session): string[] =>
+  s.linked ? [...ctx.sessions.values()].filter(x => x !== s && x.linked && samePath(x.folder, s.folder)).map(x => x.route) : [];
 
 // ---------- AGENTS.md / skills / fingerprint ----------
 function skillDirs(s: Session): string[] {
@@ -205,7 +209,7 @@ export function fingerprint(s: Session): Parts {
     recipe: recipePart(s),
     config: sha(ctx.catalog?.hashes.config ?? ""),
     mcp: sha((ctx.catalog?.hashes.mcp ?? "") + (existsSync(mcpFile) ? readFileSync(mcpFile, "utf8") : "")),
-    agents: sha(agentsContent(s.folder)),
+    agents: sha(agentsContent(s.folder) + (s.linked && existsSync(join(s.dir, "AGENTS.md")) ? readFileSync(join(s.dir, "AGENTS.md"), "utf8") : "")),
     skills: sha(skills),
   };
 }
@@ -238,48 +242,52 @@ function readMcpFile(file: string): McpFile | null | undefined {
   }
 }
 
-// Removes the servers orch owns from a folder's `.omp/mcp.json`; deletes the file when nothing else is left in it.
-export function removeOwnedMcp(folder: string, owned: string[]) {
-  const file = mcpFileOf(folder);
-  const cur = readMcpFile(file);
-  if (!cur?.mcpServers) return;
-  const before = JSON.stringify(cur);
-  for (const name of owned) delete cur.mcpServers[name];
-  if (JSON.stringify(cur) === before) return;
-  if (!Object.keys(cur.mcpServers).length && Object.keys(cur).length === 1) unlinkSync(file);
-  else writeFileSync(file, `${JSON.stringify(cur, null, 2)}\n`);
+// Adopts the entries an older orch wrote: the disabled user-level servers found in the file.
+function adoptOwnedMcp(s: Session) {
+  const r = s.recipe;
+  if (!r || r.mcpOwned !== undefined || !ctx.catalog) return;
+  const servers = ctx.catalog.mcpServers;
+  const cur = readMcpFile(mcpFileOf(s.folder));
+  r.mcpOwned = Object.entries(cur?.mcpServers ?? {}).filter(([name, d]) => servers?.[name] && d.enabled === false).map(([name]) => name);
+  delete (r as Record<string, unknown>).mcpProfileHash;
+  saveRecipe(s);
 }
 
-// Merges into `<folder>/.omp/mcp.json` a disabled entry for every user-level MCP server the recipe does not select.
-// Only entries orch owns (`recipe.mcpOwned`) are ever rewritten or removed: a project definition with the same name wins.
-export function applyMcpProfile(s: Session): boolean {
-  const r = s.recipe!;
-  const file = mcpFileOf(s.folder);
+// Rewrites `<folder>/.omp/mcp.json` for every session using that folder: a user-level server gets a disabled entry only when
+// no sharer selects it (omp has no per-session switch). Only entries orch owns are rewritten or removed: a project definition
+// with the same name wins. Without sharers every orch-written entry is removed. Returns false when the file is not valid JSON.
+export function syncFolderMcp(folder: string): boolean {
   const servers = ctx.catalog?.mcpServers;
-  if (r.mcpOwned === undefined && ctx.catalog) {
-    // Migration from the hash-guarded profile: the entries orch wrote were the disabled user-level servers.
-    const cur = readMcpFile(file);
-    r.mcpOwned = Object.entries(cur?.mcpServers ?? {}).filter(([name, d]) => servers?.[name] && d.enabled === false).map(([name]) => name);
-    delete (r as Record<string, unknown>).mcpProfileHash;
-    saveRecipe(s);
-  }
-  const mcp = r.mcp ?? "all";
-  if (mcp === "manual" || !servers || r.mcpOwned === undefined) return true;
+  if (!servers || !existsSync(folder)) return true;
+  const sharers = [...ctx.sessions.values()].filter(x => x.recipe && samePath(x.folder, folder));
+  for (const x of sharers) adoptOwnedMcp(x);
+  const active = sharers.filter(x => x.recipe!.mcp !== "manual");
+  if (sharers.length && !active.length) return true;
+  const file = mcpFileOf(folder);
   const cur = readMcpFile(file);
-  if (cur === null) {
-    setIssue(s, "mcp-profile-invalid", "flag", "`.omp/mcp.json` is not valid JSON", []);
-    return false;
+  if (cur === null) return false;
+  const entryOf = (name: string) => {
+    const d = servers[name];
+    return { type: d.type, command: d.command, args: d.args, url: d.url, enabled: false };
+  };
+  // disabled set: user-level servers that no active sharer selects (no sharers: none, so every owned entry goes)
+  let wanted = active.length ? Object.keys(servers) : [];
+  for (const x of active) {
+    const mcp = x.recipe!.mcp ?? "all";
+    wanted = mcp === "all" || mcp === "manual" ? [] : wanted.filter(name => !mcp.includes(name));
+  }
+  const owned = new Set(sharers.flatMap(x => x.recipe!.mcpOwned ?? []));
+  if (!sharers.length) {
+    // nobody left to remember what orch wrote: an entry identical to what orch writes for a catalog server is ours
+    for (const [name, d] of Object.entries(cur?.mcpServers ?? {})) if (servers[name] && JSON.stringify(d) === JSON.stringify(entryOf(name))) owned.add(name);
   }
   const next: McpFile = structuredClone(cur ?? {});
-  const wanted = mcp === "all" ? [] : Object.keys(servers).filter(name => !mcp.includes(name));
-  const owned = new Set(r.mcpOwned);
   const before = JSON.stringify(cur ?? {});
-  for (const name of r.mcpOwned) if (!wanted.includes(name) && next.mcpServers) delete next.mcpServers[name];
+  for (const name of owned) if (!wanted.includes(name) && next.mcpServers) delete next.mcpServers[name];
   for (const name of wanted) {
     const present = next.mcpServers ? name in next.mcpServers : false;
     if (present && !owned.has(name)) continue; // project definition wins
-    const d = servers[name];
-    (next.mcpServers ??= {})[name] = { type: d.type, command: d.command, args: d.args, url: d.url, enabled: false };
+    (next.mcpServers ??= {})[name] = entryOf(name);
     owned.add(name);
   }
   const ownedNow = [...owned].filter(name => wanted.includes(name));
@@ -287,16 +295,25 @@ export function applyMcpProfile(s: Session): boolean {
     if (next.mcpServers && !Object.keys(next.mcpServers).length && Object.keys(next).length === 1) {
       if (cur) unlinkSync(file);
     } else {
-      mkdirSync(join(s.folder, ".omp"), { recursive: true });
+      mkdirSync(join(folder, ".omp"), { recursive: true });
       writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`);
     }
   }
-  if (JSON.stringify(ownedNow) !== JSON.stringify(r.mcpOwned)) {
+  for (const x of sharers) {
+    const r = x.recipe!;
+    if ([...(r.mcpOwned ?? [])].sort().join("\n") === [...ownedNow].sort().join("\n")) continue;
     r.mcpOwned = ownedNow;
-    saveRecipe(s);
+    saveRecipe(x);
   }
-  clearIssue(s, "mcp-profile-invalid");
   return true;
+}
+
+export function applyMcpProfile(s: Session): boolean {
+  adoptOwnedMcp(s);
+  const ok = syncFolderMcp(s.folder);
+  if (ok) clearIssue(s, "mcp-profile-invalid");
+  else setIssue(s, "mcp-profile-invalid", "flag", "`.omp/mcp.json` is not valid JSON", []);
+  return ok;
 }
 
 // A linked session lives in a user's repository: keep orch's files out of `git status` through `.git/info/exclude`
@@ -332,9 +349,22 @@ function writeOverlay(s: Session): string {
   // Selected skills only: the built-in subagents must stay reachable through includeSkills.
   if (r.skills) lines.push(`  includeSkills: ${JSON.stringify([...r.skills, "task/*", "scout/*", "reviewer/*", "security-reviewer/*", "sonic/*", "seance/*"])}`);
   lines.push(`  customDirectories: ${JSON.stringify(skillDirs(s))}`);
-  mkdirSync(orchDir(s.folder), { recursive: true });
-  const file = join(orchDir(s.folder), "config.yml");
+  mkdirSync(orchDir(s.dir), { recursive: true });
+  const file = join(orchDir(s.dir), "config.yml");
   writeFileSync(file, `${lines.join("\n")}\n`);
+  return file;
+}
+
+// One `--append-system-prompt` only: the protocol, where this session keeps its own files, and (linked sessions) its own AGENTS.md,
+// which omp does not load because the cwd is the attached folder.
+function writePrompt(s: Session): string {
+  const protocol = readFileSync(join(IO, "protocols", s.kind === "root" ? "ROOT-PROTOCOL.md" : "PEER-PROTOCOL.md"), "utf8");
+  let text = `${protocol}\n\n## This session\n- Route: ${s.route}\n- Session folder (your own files): ${s.dir}\n- Outbox for deliverables: ${join(s.dir, "outbox")}\n`;
+  const agents = join(s.dir, "AGENTS.md");
+  if (s.linked && existsSync(agents)) text += `\n## Session instructions\n\n${readFileSync(agents, "utf8")}`;
+  mkdirSync(orchDir(s.dir), { recursive: true });
+  const file = join(orchDir(s.dir), "prompt.md");
+  writeFileSync(file, text);
   return file;
 }
 
@@ -398,7 +428,7 @@ export async function startSession(s: Session): Promise<boolean> {
       return false;
     }
     clearIssue(s, "tools-unavailable");
-    gitExclude(s, [".orch/"]);
+    // the session's files all live in its workspace dir: nothing of orch is written into an attached folder besides `.omp/mcp.json`
     const mismatch = ctx.globalIssues.has("sdk-mismatch");
     let file: string | undefined;
     if (r.sessionId) {
@@ -436,7 +466,7 @@ export async function startSession(s: Session): Promise<boolean> {
     if (r.sessionId) args.push("-r", r.sessionId);
     if (r.model) args.push("--model", r.model);
     if (r.thinking) args.push("--thinking", r.thinking);
-    args.push("--config", overlay, "--append-system-prompt", join(IO, "protocols", s.kind === "root" ? "ROOT-PROTOCOL.md" : "PEER-PROTOCOL.md"));
+    args.push("--config", overlay, "--append-system-prompt", writePrompt(s));
     args.push("-e", join(IO, "term-ui", "orch-ext.ts"));
 
     const parts = fingerprint(s);
@@ -498,7 +528,13 @@ export async function startSession(s: Session): Promise<boolean> {
 // A fresh session whose hello never arrived: adopt the single session omp created for this folder after the spawn.
 async function helloMissing(s: Session, proc: PtyProc) {
   if (s.proc !== proc || s.helloSeen || !s.recipe || s.recipe.sessionId) return;
-  const fresh = (await bucketSessions(s.folder)).filter(f => f.birthMs >= (s.spawnedAt ?? 0) - 2000);
+  const owned = new Set<string>(); // conversations of the other sessions sharing this folder are never ours
+  for (const o of ctx.sessions.values()) {
+    if (o === s || !o.recipe) continue;
+    if (o.recipe.sessionId) owned.add(o.recipe.sessionId);
+    for (const id of o.recipe.previousSessionIds) owned.add(id);
+  }
+  const fresh = (await bucketSessions(s.folder)).filter(f => f.birthMs >= (s.spawnedAt ?? 0) - 2000 && !owned.has(f.id));
   if (fresh.length === 1) {
     s.recipe.sessionId = fresh[0].id;
     saveRecipe(s);
@@ -641,21 +677,36 @@ export function observe(s: Session) {
 
 // `/move` inside the session: the session folder follows the conversation.
 function followCwd(s: Session, newCwd: string) {
+  const ws = resolve(ctx.ws);
+  const inside = resolve(newCwd).startsWith(ws + "/") || resolve(newCwd).startsWith(ws + "\\");
   if (s.linked) {
-    // The recipe lives in the external folder: following would move it out of the link's target.
-    setIssue(s, "cwd-moved-in-session", "ask", `the session moved to ${newCwd}, which a linked session cannot follow`, ["move-back"]);
+    // The recipe lives in the session dir: the attached folder follows the conversation when the new cwd is outside the workspace.
+    if (s.recipe && existsSync(newCwd) && !inside) {
+      const old = s.folder;
+      s.folder = resolve(newCwd);
+      s.recipe.folder = s.folder;
+      s.recipe.mcpOwned = []; // the entries belong to the old folder
+      saveRecipe(s);
+      syncFolderMcp(old);
+      setIssue(s, "followed-move", "info", `${old} → ${newCwd}`, ["dismiss"]);
+      hooks.reconcile();
+    } else {
+      setIssue(s, "cwd-moved-in-session", "ask", `the session moved to ${newCwd}, which a linked session cannot follow`, ["move-back"]);
+    }
     return;
   }
-  const inside = resolve(newCwd).startsWith(resolve(ctx.ws) + "/") || resolve(newCwd).startsWith(resolve(ctx.ws) + "\\");
   if (inside && existsSync(newCwd) && !existsSync(sessionFile(newCwd))) {
     const oldRoute = s.route;
     try {
-      renameSync(orchDir(s.folder), orchDir(newCwd));
+      renameSync(orchDir(s.dir), orchDir(newCwd));
+      const old = s.folder;
+      s.folder = newCwd;
+      s.dir = newCwd;
       if (s.recipe) {
-        removeOwnedMcp(s.folder, s.recipe.mcpOwned ?? []);
         s.recipe.mcpOwned = [];
         writeRecipe(newCwd, s.recipe);
       }
+      syncFolderMcp(old);
     } catch (e) {
       setIssue(s, "cwd-moved-in-session", "ask", `cannot follow the move: ${(e as Error).message}`, ["move-back"]);
       return;

@@ -282,7 +282,7 @@
   .wiz-resume .wiz-hint { margin: 0; }
   .wiz-warns { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
   .wiz-warns li { padding-left: 10px; border-left: 2px solid var(--h); color: color-mix(in srgb, var(--h) 85%, white); line-height: 1.5; }
-  #wizOpenHolder { align-self: flex-start; }
+  .wiz-shared { margin: 0; padding-left: 10px; border-left: 2px solid var(--h); color: color-mix(in srgb, var(--h) 85%, white); }
   #wizTools, #editTools { margin-top: 20px; }
   #editExtra { margin-top: 20px; }
   .mono-in { font-family: var(--mono); font-size: 12px; }
@@ -553,7 +553,7 @@
           <div class="wiz-info" id="wizInfo" hidden>
             <div class="chips" id="wizChips"></div>
             <div class="formerr" id="wizInfoErr" hidden></div>
-            <button class="btn" type="button" id="wizOpenHolder" hidden></button>
+            <p class="wiz-hint wiz-shared" id="wizShared" data-h="warn" hidden></p>
             <div class="wiz-resume" id="wizResume" data-h="ok" hidden></div>
             <fieldset class="wiz-field" id="wizConvSet">
               <legend data-i18n="wiz.conversation"></legend>
@@ -802,7 +802,7 @@
   <header class="lead-head" id="leadHead">
     <div class="lead-id">
       <div class="lead-name"><span class="chip-lead"><svg class="i" viewBox="0 0 24 24"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.020 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"/><path d="M5 21h14"/></svg><span data-i18n="lead.chip"></span></span><span id="title"></span></div>
-      <div class="lead-meta"><span class="pill" id="rootstate"></span><span class="pill" id="rootaw" data-h="warn" data-i18n="state.awaiting" hidden></span><span class="mono" id="rootmodel"></span><span class="mono" id="rootcost"></span></div>
+      <div class="lead-meta"><span class="pill" id="rootstate"></span><span class="pill" id="rootaw" data-h="warn" data-i18n="state.awaiting" hidden></span><span class="mono" id="rootmodel"></span><span class="mono" id="rootshared" hidden></span><span class="mono" id="rootcost"></span></div>
     </div>
     <span class="spacer"></span>
     <div class="tools" id="roottools"></div>
@@ -925,6 +925,13 @@ const health = s => (!s.running ? (s.desired === "stopped" ? "off" : "bad") : s.
 const stateLabel = s => (!s.running ? (s.desired === "stopped" ? t("state.stopped") : `${t("state.exited")}${s.exit ? ` · ${s.exit}` : ""}`) : s.hung ? t("state.hung") : t(`state.${s.state}`));
 // The recipe model is the one omp runs: it is set at start and follows in-session /model changes.
 const modelOf = s => s.model ?? t("model.default");
+// Sessions attached to the same external folder share its files and git checkout; the card says so.
+function paintShared(el, s) {
+  const routes = s.sharedWith ?? [];
+  el.hidden = !routes.length;
+  el.textContent = routes.length ? t("card.shared", { n: routes.length }) : "";
+  el.title = routes.length ? t("card.sharedTitle", { routes: routes.join(", ") }) : "";
+}
 
 const XTERM_THEME = { background: "#0a0c10", foreground: "#e8eaf0", cursor: "#7aa7ff", cursorAccent: "#0a0c10", selectionBackground: "rgba(122,167,255,.32)" };
 
@@ -1170,6 +1177,12 @@ function renderTools(host, { folderInfo: info, recipe }) {
     manual.textContent = t("form.mcpManual");
     mcpSec.appendChild(manual);
   }
+  if (info?.sharedWith?.length) {
+    const shared = document.createElement("p");
+    shared.className = "wiz-hint";
+    shared.textContent = t("form.mcpShared", { routes: info.sharedWith.join(", ") });
+    mcpSec.appendChild(shared);
+  }
 
   // Skills: everything checked = no filter (skills:null, future skills included); anything unchecked = explicit allowlist.
   const skillsSec = toolSection(host, "form.skillsTitle", t("form.skillsHint"));
@@ -1411,7 +1424,7 @@ async function editRelocate(folder) {
     $("editFolder").value = $("editFolder").title = fresh.folder;
     $("editFolderIn").hidden = !fresh.linked;
   }
-  $("editFolderOk").textContent = res.left?.length ? t("edit.folderLeft", { names: res.left.join(", ") }) : t("edit.folderMoved");
+  $("editFolderOk").textContent = t("edit.folderMoved");
   $("editFolderOk").hidden = false;
 }
 $("editFolderChange").onclick = async () => {
@@ -1636,7 +1649,7 @@ function cardFor(k) {
   const el = document.createElement("article");
   el.className = "card";
   el.innerHTML = `<button class="head" aria-expanded="false"><span class="dot"></span><span class="name"></span><span class="states"><span class="pill st"></span><span class="pill aw" data-h="warn" hidden>${t("state.awaiting")}</span></span>${ic("chev", "chev")}
-      <span class="sub"><span class="mono model"></span><span class="mono cost"></span><span class="purpose"></span></span></button>
+      <span class="sub"><span class="mono model"></span><span class="mono shared" hidden></span><span class="mono cost"></span><span class="purpose"></span></span></button>
     <div class="alert" role="alert"><span></span><button class="btn" data-a="fix"></button></div>
     <div class="issues"></div>
     <div class="bar">${toolsHtml()}<span class="spacer"></span>
@@ -1812,6 +1825,7 @@ function render() {
   $("rootstate").dataset.h = health(root) === "bad" ? "bad" : root.issues?.some(i => i.level === "ask" || i.level === "flag") ? "warn" : health(root);
   $("rootstate").textContent = stateLabel(root);
   $("rootmodel").textContent = modelOf(root);
+  paintShared($("rootshared"), root);
   syncModel($("roottools"), root);
   paintToggle($("roottools").querySelector('[data-a="toggle"]'), root);
   paintOverlay($("rootterm"), root);
@@ -1850,6 +1864,7 @@ function render() {
     pill.dataset.h = h;
     pill.textContent = stateLabel(k);
     c.el.querySelector(".model").textContent = modelOf(k);
+    paintShared(c.el.querySelector(".shared"), k);
     syncModel(c.el.querySelector(".bar"), k);
     c.el.querySelector(".purpose").textContent = k.purpose ?? k.folder;
     if (h === "bad" || h === "warn") {
@@ -1947,7 +1962,6 @@ async function openWizard(mode, parent = null) {
   $("wizRole").disabled = false;
   $("wizResume").replaceChildren();
   $("wizNext").disabled = false;
-  $("wizOpenHolder").hidden = true;
   wizError();
   wizGo(1);
   $("wizDlg").showModal();
@@ -1961,11 +1975,11 @@ const chip = (icon, text) => {
   return el;
 };
 
-// Resuming: an orphan recipe (session.json without a link) in the picked folder. The recipe's conversation is the default pick in the list
+// Resuming: a recipe left in the picked folder by an older orch version. The recipe's conversation is the default pick in the list
 // (another one of the folder can be chosen); step 2 starts from its values and the role (a preset) cannot be combined with it.
 const wizResuming = () => {
   const ex = wiz.res?.info?.existing;
-  return wizLoc() === "existing" && ex?.state === "orphan" && wiz.loadedFolder === $("wizFolder").value.trim() ? ex : null;
+  return wizLoc() === "existing" && ex && wiz.loadedFolder === $("wizFolder").value.trim() ? ex : null;
 };
 
 // A valid session name out of free text (conversation title, folder basename), or "".
@@ -1997,7 +2011,7 @@ function wizDefaultsInto() {
   $("wizCompact").value = wiz.defaults.compactPercent ?? "";
 }
 
-// Warning codes of the orphan recipe (server-computed). conversation-live blocks; the rest need the explicit acknowledgement.
+// Warning codes of the legacy recipe (server-computed). conversation-live blocks; the rest need the explicit acknowledgement.
 const resumeWarnings = ex => ex?.warnings ?? [];
 const resumeBlocked = ex => {
   const warns = resumeWarnings(ex);
@@ -2099,18 +2113,17 @@ function paintInfo() {
   const res = wiz.res;
   $("wizInfo").hidden = !res;
   syncResume();
-  $("wizOpenHolder").hidden = true;
+  $("wizShared").hidden = true;
   if (!res) return;
   const info = res.info;
   const existing = info?.existing;
-  const holder = existing?.state === "managed" && existing.route && byRoute(existing.route) ? existing.route : null;
-  $("wizOpenHolder").hidden = !holder;
-  $("wizOpenHolder").dataset.route = holder ?? "";
-  $("wizOpenHolder").textContent = holder ? t("wiz.openHolder", { route: holder }) : "";
   const problems = res.error ? [res.error] : [
-    ...(existing?.state === "managed" ? [t("wiz.folderUsedBy", { route: existing.route ?? "" })] : info.isSession && existing?.state !== "orphan" ? [t("wiz.isSession")] : []),
+    ...(info.isSession && !existing ? [t("wiz.isSession")] : []),
     ...(info.errors ?? []),
   ];
+  const sharedWith = info?.sharedWith ?? [];
+  $("wizShared").hidden = !sharedWith.length;
+  $("wizShared").textContent = sharedWith.length ? t("wiz.sharedWith", { routes: sharedWith.join(", ") }) : "";
   $("wizInfoErr").hidden = !problems.length;
   $("wizInfoErr").textContent = problems.join(" · ");
   const chips = [];
@@ -2119,8 +2132,8 @@ function paintInfo() {
   if (info?.projectSkills.length) chips.push(chip("sparkles", t("wiz.chipSkills", { n: info.projectSkills.length })));
   if (info?.projectMcp.length) chips.push(chip("plug", t("wiz.chipMcp", { n: info.projectMcp.length })));
   $("wizChips").replaceChildren(...chips);
-  const orphan = existing?.state === "orphan";
-  const noConv = !info || (!orphan && (info.isSession || !!existing));
+  const taken = c => c.live || !!c.owner;
+  const noConv = !info || (info.isSession && !existing);
   $("wizConvSet").hidden = noConv;
   const list = $("wizConvs");
   const picked = wizConv();
@@ -2128,13 +2141,13 @@ function paintInfo() {
   $("wizConvNone").hidden = true;
   if (noConv) return;
   const convs = info.conversations;
-  // Orphan: the recipe's conversation leads and is the default; "New conversation" only exists when that one is gone (the server cannot resume "nothing").
-  const current = orphan ? convs.find(c => c.id === existing.sessionId) : undefined;
-  const chosen = convs.some(c => !c.live && c.id === picked) ? picked : current && !current.live ? current.id : "";
+  // Legacy recipe: its conversation leads and is the default; "New conversation" only exists when that one is gone (the server cannot resume "nothing").
+  const current = existing ? convs.find(c => c.id === existing.sessionId) : undefined;
+  const chosen = convs.some(c => !taken(c) && c.id === picked) ? picked : current && !taken(current) ? current.id : "";
   if (!current) list.appendChild(checkRow({ type: "radio", name: "wizConv", value: "", label: t("wiz.convNew"), note: t("wiz.convNewNote"), checked: chosen === "" }));
   for (const c of current ? [current, ...convs.filter(x => x !== current)] : convs) {
-    const note = [c === current ? t("wiz.convCurrent") : null, ago(c.modified), c.model, c.live ? t("wiz.convOpen") : null].filter(Boolean).join(" · ");
-    list.appendChild(checkRow({ type: "radio", name: "wizConv", value: c.id, label: c.title ?? t("wiz.convUntitled"), note, checked: !c.live && c.id === chosen, off: c.live, locked: c.live }));
+    const note = [c === current ? t("wiz.convCurrent") : null, ago(c.modified), c.model, c.live ? t("wiz.convOpen") : null, c.owner ? t("wiz.convOwned", { route: c.owner }) : null].filter(Boolean).join(" · ");
+    list.appendChild(checkRow({ type: "radio", name: "wizConv", value: c.id, label: c.title ?? t("wiz.convUntitled"), note, checked: !taken(c) && c.id === chosen, off: taken(c), locked: taken(c) }));
   }
   $("wizConvNone").hidden = convs.length > 0;
 }
@@ -2276,7 +2289,7 @@ function fileSet(route, title, files, emptyKey) {
   for (const f of files) {
     const a = document.createElement("a");
     a.className = "listrow";
-    a.href = `/api/sessions/${enc(route)}/file?path=${enc(f.path)}`;
+    a.href = `/api/sessions/${enc(route)}/file?path=${enc(f.path)}&root=${enc(f.root)}`;
     a.target = "_blank";
     a.rel = "noopener";
     a.innerHTML = `${ic("doc")}<span class="nm"></span><span class="meta"></span><span class="meta"></span>`;
@@ -2629,18 +2642,12 @@ $("wizNext").onclick = async () => {
     clearTimeout(wiz.timer);
     if (wiz.loadedFolder !== $("wizFolder").value.trim()) await loadInfo(); // also applies the recipe prefill (name, mission) the checks below need
     const info = wiz.res?.info;
-    if (!info || info.existing?.state === "managed" || (info.isSession && info.existing?.state !== "orphan")) return wizError(t("wiz.needFolder"));
+    if (!info || (info.isSession && !info.existing)) return wizError(t("wiz.needFolder"));
     const resuming = wizResuming();
     if (resumeBlocked(resuming)) return wizError(t(resumeWarnings(resuming).includes("conversation-live") ? "wiz.warn.conversation-live" : "wiz.warnAck"));
   }
   if (!$("wizName").reportValidity() || !$("wizPurpose").reportValidity()) return;
   wizGo(2);
-};
-$("wizOpenHolder").onclick = () => {
-  const route = $("wizOpenHolder").dataset.route;
-  if (!route) return;
-  $("wizDlg").close();
-  openRoute(route);
 };
 $("wizForm").onsubmit = e => { e.preventDefault(); if (wizStep === 1) $("wizNext").click(); };
 $("wizDone").onclick = async () => {
