@@ -416,6 +416,8 @@
   textarea.mono { font-family: var(--mono); font-size: 12px; white-space: pre; overflow: auto; color: var(--fg); }
   .inb-ctl { display: flex; flex-direction: column; gap: 8px; }
   .inb-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .inb-actions.opts { flex-direction: column; align-items: stretch; }
+  .inb-actions.opts .btn { height: auto; min-height: 32px; padding-block: 6px; white-space: normal; text-align: left; justify-content: flex-start; line-height: 1.4; }
   .inb-reject { display: flex; gap: 8px; }
   .inb-reject input { flex: 1; min-width: 0; }
   .hit { all: unset; box-sizing: border-box; width: 100%; display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; }
@@ -2815,7 +2817,7 @@ function inboxCard(item) {
   } else if (item.kind === "question" && open) {
     const options = item.data?.options ?? [];
     if (options.length) {
-      const row = mk("div", "inb-actions");
+      const row = mk("div", "inb-actions opts");
       for (const o of options) row.append(button("", o, () => void act("answer", { answer: o })));
       ctl.append(row);
     } else {
