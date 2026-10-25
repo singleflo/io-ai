@@ -949,28 +949,61 @@ function attach(route, host) {
   const send = d => ws.readyState === 1 && ws.send(JSON.stringify({ t: "in", d }));
   term.attachCustomKeyEventHandler(e => {
     if (e.type !== "keydown" || e.isComposing || e.metaKey) return true; // IME/dead keys go through xterm's composition; Cmd shortcuts stay the browser's
-    // Shift+Enter: xterm.js sends "\r" like Enter; omp inserts a newline on Ctrl+J ("\n").
-    if (e.key === "Enter" && e.shiftKey && !e.ctrlKey && !e.altKey) {
-      e.preventDefault();
-      send("\n");
-      return false;
-    }
-    // A character produced through a modifier layer: Option on a Mac keyboard (@ # [ ] { } € on the Italian layout),
-    // AltGr on Windows/Linux (reported as Ctrl+Alt). xterm.js treats these as Alt shortcuts and drops the character,
-    // so the produced character is sent as typed. Plain Alt+key on Windows/Linux and Ctrl+Alt+letter without AltGr
-    // remain xterm's meta shortcuts.
-    if (e.altKey && [...e.key].length === 1) {
-      const altGr = e.getModifierState?.("AltGraph") === true || (e.ctrlKey && !/^[a-z0-9]$/i.test(e.key));
-      if (IS_MAC ? e.ctrlKey : !altGr) return true;
-      e.preventDefault(); // no keypress/input event afterwards: the character is sent once
-      send(e.key);
-      return false;
-    }
-    return true;
+    const seq = ompKey(e);
+    if (seq === null) return true;
+    e.preventDefault(); // no keypress/input event afterwards: the key is sent once
+    send(seq);
+    return false;
   });
   const ro = new ResizeObserver(resize);
   ro.observe(host);
   return live;
+}
+
+// Keyboard → bytes for omp, for the chords xterm.js cannot express or loses (omp keybindings: pi-tui app-keybindings.ts).
+// Returns null when xterm's own encoding is right. omp decodes legacy ESC-prefixed Alt keys and Kitty CSI-u
+// (`ESC [ <codepoint> ; <1 + shift + 2·alt + 4·ctrl> u`), which carries Shift on Ctrl chords and Ctrl on Enter/Backspace.
+// Characters an Option layer is used to type on a Mac (Italian layout: @ # [ ] { } ~ € …) stay characters.
+const MAC_OPTION_CHARS = new Set([..."@#[]{}~`|\\€$£§°"]);
+const csiU = (code, e) => `\x1b[${code};${1 + (e.shiftKey ? 1 : 0) + (e.altKey ? 2 : 0) + (e.ctrlKey ? 4 : 0)}u`;
+function ompKey(e) {
+  const letter = /^Key([A-Z])$/.exec(e.code)?.[1].toLowerCase();
+  const digit = /^Digit([0-9])$/.exec(e.code)?.[1];
+  // Enter: Shift inserts a newline (omp: Ctrl+J); Ctrl/Alt variants (follow-up, approve) need CSI-u.
+  if (e.key === "Enter") {
+    if (e.shiftKey && !e.ctrlKey && !e.altKey) return "\n";
+    return e.ctrlKey || e.altKey ? csiU(13, e) : null;
+  }
+  if (e.key === "Backspace") {
+    if (e.ctrlKey) return csiU(127, e);
+    return e.altKey ? "\x1b\x7f" : null;
+  }
+  if (e.key === "Delete" && e.altKey) return "\x1b[3;3~";
+  const arrow = { ArrowUp: "A", ArrowDown: "B", ArrowRight: "C", ArrowLeft: "D" }[e.key];
+  if (arrow && (e.altKey || e.ctrlKey || e.shiftKey)) return `\x1b[1;${1 + (e.shiftKey ? 1 : 0) + (e.altKey ? 2 : 0) + (e.ctrlKey ? 4 : 0)}${arrow}`;
+  // Ctrl without Alt: Shift+letter (model back, tool visibility, raw paste…) and punctuation (undo, redo) need CSI-u.
+  if (e.ctrlKey && !e.altKey) {
+    if (letter && e.shiftKey) return letter === "c" ? null : csiU(letter.charCodeAt(0), e); // Ctrl+Shift+C stays copy
+    if (e.code === "Period") return csiU(46, e);
+    if (e.code === "Minus") return e.shiftKey ? "\x1f" : csiU(45, e);
+    return null;
+  }
+  if (!e.altKey) return null;
+  const single = [...e.key].length === 1;
+  if (IS_MAC) {
+    if (e.ctrlKey) return letter ? csiU(letter.charCodeAt(0), e) : null; // Ctrl+Option+] and friends
+    if (single && MAC_OPTION_CHARS.has(e.key)) return e.key;
+    if (letter) return `\x1b${e.shiftKey ? letter.toUpperCase() : letter}`; // Option+letter = omp Alt shortcut
+    if (digit) return `\x1b${digit}`;
+    return single ? e.key : null; // other Option characters (– … ò) are typed
+  }
+  // Windows/Linux: AltGr (reported as Ctrl+Alt) types characters; plain Alt is meta.
+  const altGr = e.getModifierState?.("AltGraph") === true || (e.ctrlKey && single && e.key.toLowerCase() !== letter && e.key !== digit);
+  if (altGr) return single ? e.key : null;
+  if (e.ctrlKey) return letter ? csiU(letter.charCodeAt(0), e) : e.code === "BracketRight" ? csiU(93, e) : null;
+  if (letter) return `\x1b${e.shiftKey ? letter.toUpperCase() : letter}`;
+  if (digit) return `\x1b${digit}`;
+  return single ? `\x1b${e.key}` : null;
 }
 
 // Scrim over a terminal whose process is stopped or frozen, with the action that fixes it.
