@@ -862,6 +862,8 @@ import { FitAddon } from "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/+
 // Models offered by the per-session selector come from the omp catalog, never a hardcoded list.
 const CATALOG = await (await fetch("/api/catalog")).json();
 const MODELS = CATALOG?.models ?? [];
+// Keyboard platform: Option composes characters on a Mac; elsewhere AltGr does and Alt is a meta key.
+const IS_MAC = /mac|iphone|ipad/i.test(navigator.userAgentData?.platform ?? navigator.platform ?? ""); // "macOS" (Chromium) or "MacIntel"
 // Lucide icon paths (stroke icons, one family).
 const ICONS = {
   play: '<polygon points="6 3 20 12 6 21 6 3"/>',
@@ -944,11 +946,27 @@ function attach(route, host) {
   ws.onopen = () => { term.reset(); resize(); };
   ws.onclose = () => { live.closed = true; }; // server gone or restarted: render() re-attaches
   term.onData(d => ws.readyState === 1 && ws.send(JSON.stringify({ t: "in", d })));
-  // xterm.js sends "\r" for Shift+Enter too; omp inserts a newline on Ctrl+J ("\n"), so Shift+Enter sends that instead.
+  const send = d => ws.readyState === 1 && ws.send(JSON.stringify({ t: "in", d }));
   term.attachCustomKeyEventHandler(e => {
-    if (e.key !== "Enter" || !e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return true;
-    if (e.type === "keydown" && ws.readyState === 1) ws.send(JSON.stringify({ t: "in", d: "\n" }));
-    return false;
+    if (e.type !== "keydown" || e.isComposing || e.metaKey) return true; // IME/dead keys go through xterm's composition; Cmd shortcuts stay the browser's
+    // Shift+Enter: xterm.js sends "\r" like Enter; omp inserts a newline on Ctrl+J ("\n").
+    if (e.key === "Enter" && e.shiftKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      send("\n");
+      return false;
+    }
+    // A character produced through a modifier layer: Option on a Mac keyboard (@ # [ ] { } € on the Italian layout),
+    // AltGr on Windows/Linux (reported as Ctrl+Alt). xterm.js treats these as Alt shortcuts and drops the character,
+    // so the produced character is sent as typed. Plain Alt+key on Windows/Linux and Ctrl+Alt+letter without AltGr
+    // remain xterm's meta shortcuts.
+    if (e.altKey && [...e.key].length === 1) {
+      const altGr = e.getModifierState?.("AltGraph") === true || (e.ctrlKey && !/^[a-z0-9]$/i.test(e.key));
+      if (IS_MAC ? e.ctrlKey : !altGr) return true;
+      e.preventDefault(); // no keypress/input event afterwards: the character is sent once
+      send(e.key);
+      return false;
+    }
+    return true;
   });
   const ro = new ResizeObserver(resize);
   ro.observe(host);
