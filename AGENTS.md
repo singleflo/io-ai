@@ -41,3 +41,6 @@ Applies to every text an agent reads: protocols, skills, sandbox `AGENTS.md`, `-
 ## Run
 - `bun term-ui/server.ts` (port 8787, `PORT` to override). Stopping the server stops every child; restarting resumes `desired: running` sessions.
 - `bun term-ui/orch.ts list` to inspect state.
+
+## Future work
+- Non-omp children (Claude Code, Codex, Grok): evaluate [agent-bus-team](https://pypi.org/project/agent-bus-team/) (repo https://github.com/danbarua/agent-bus; `uv tool install agent-bus-team`, MCP `agent-bus mcp`) as the cross-harness message transport instead of omp-peers. It is transport only: io-ai would still need to spawn/supervise those processes, and REQ register, costs, approvals and state would have to be rebuilt without `orch-ext.ts` (e.g. by intercepting `mcp__agent_bus_*` calls). Not needed while every session is omp.
