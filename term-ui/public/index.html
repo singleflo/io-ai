@@ -944,6 +944,12 @@ function attach(route, host) {
   ws.onopen = () => { term.reset(); resize(); };
   ws.onclose = () => { live.closed = true; }; // server gone or restarted: render() re-attaches
   term.onData(d => ws.readyState === 1 && ws.send(JSON.stringify({ t: "in", d })));
+  // xterm.js sends "\r" for Shift+Enter too; omp inserts a newline on Ctrl+J ("\n"), so Shift+Enter sends that instead.
+  term.attachCustomKeyEventHandler(e => {
+    if (e.key !== "Enter" || !e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return true;
+    if (e.type === "keydown" && ws.readyState === 1) ws.send(JSON.stringify({ t: "in", d: "\n" }));
+    return false;
+  });
   const ro = new ResizeObserver(resize);
   ro.observe(host);
   return live;
