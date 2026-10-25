@@ -359,7 +359,10 @@ function writeOverlay(s: Session): string {
 // which omp does not load because the cwd is the attached folder.
 function writePrompt(s: Session): string {
   const protocol = readFileSync(join(IO, "protocols", s.kind === "root" ? "ROOT-PROTOCOL.md" : "PEER-PROTOCOL.md"), "utf8");
-  let text = `${protocol}\n\n## This session\n- Route: ${s.route}\n- Session folder (your own files): ${s.dir}\n- Outbox for deliverables: ${join(s.dir, "outbox")}\n`;
+  const others = sharedWith(s);
+  let text = `${protocol}\n\n## This session\n- Route: ${s.route}\n- Peer name: ${peerOf(s.route)}\n- Session folder (your own files): ${s.dir}\n- Outbox for deliverables: ${join(s.dir, "outbox")}\n`;
+  if (s.linked) text += `- Working folder: ${s.folder}\n`;
+  if (others.length) text += `- Other sessions in the working folder when you started: ${others.map(r => `${r} (peer ${peerOf(r)})`).join(", ")}. \`orch list\` shows the current list (\`sharedWith\`).\n`;
   const agents = join(s.dir, "AGENTS.md");
   if (s.linked && existsSync(agents)) text += `\n## Session instructions\n\n${readFileSync(agents, "utf8")}`;
   mkdirSync(orchDir(s.dir), { recursive: true });

@@ -1,5 +1,6 @@
 // Workspace model: a session is a folder containing `.orch/session.json`; routes are relative folder paths.
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
@@ -65,7 +66,21 @@ export const readLink = (dir: string): string | undefined => {
   }
 };
 export const toRoute = (ws: string, folder: string) => relative(ws, folder).split(sep).join("/");
-export const peerOf = (route: string) => route.replaceAll("/", ".");
+// omp peer names: 1-24 chars of [A-Za-z0-9_.-], not all digits, not main/all/self; omp silently replaces an invalid one with
+// the cwd basename. Short routes keep the readable "<parent>.<child>" form; longer or reserved ones become
+// "<parent>.<name>-<hash4>" (last two route segments, truncated) so they stay unique and still read as a child.
+const PEER_MAX = 24;
+const RESERVED_PEERS = new Set(["main", "all", "self"]);
+const peerSafe = (seg: string) => seg.replace(/[^A-Za-z0-9_-]/g, "-");
+export const peerOf = (route: string): string => {
+  const segs = route.split("/").map(peerSafe);
+  const full = segs.join(".");
+  if (full.length <= PEER_MAX && !RESERVED_PEERS.has(full) && !/^\d+$/.test(full)) return full;
+  const hash = createHash("sha1").update(route).digest("hex").slice(0, 4);
+  const name = segs[segs.length - 1].slice(0, 14);
+  const parent = segs.length > 1 ? segs[segs.length - 2].slice(0, PEER_MAX - 6 - name.length).replace(/[-_]+$/, "") : "";
+  return `${parent ? `${parent}.` : ""}${name}-${hash}`;
+};
 
 // Real-path comparison; case-insensitive on macOS/Windows file systems.
 export function samePath(a: string, b: string): boolean {

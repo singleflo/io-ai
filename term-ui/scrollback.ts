@@ -1,9 +1,9 @@
-// Persistent terminal scrollback: `<ws>/.orch/scrollback/<peer>.log`, one file per route (`/` -> `.`).
+// Persistent terminal scrollback: `<ws>/.orch/scrollback/<route>.log`, one file per route (`/` -> `.`).
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { orchDir, peerOf } from "./workspace";
+import { orchDir } from "./workspace";
 
-const fileOf = (ws: string, route: string) => join(orchDir(ws), "scrollback", `${peerOf(route)}.log`);
+const fileOf = (ws: string, route: string) => join(orchDir(ws), "scrollback", `${route.replaceAll("/", ".")}.log`);
 
 export function loadScrollback(ws: string, route: string): string {
   try {

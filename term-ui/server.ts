@@ -34,6 +34,7 @@ for (const item of inboxList("open", 10_000)) if (item.kind === "approval" || it
 const TOKEN = ensureToken(ctx.ws);
 
 const RECIPE_KEYS = ["model", "thinking", "roles", "compactPercent", "mcp", "skills", "tools", "approve", "schedules", "triggers", "env"] as const;
+const DUPLICATE_KEYS = RECIPE_KEYS.filter(k => k !== "schedules" && k !== "triggers"); // a trigger id is a webhook URL, a copied schedule would fire twice
 const json = (v: unknown, status = 200) => Response.json(v, { status });
 const bad = (text: string, status = 400) => new Response(text, { status });
 
@@ -465,6 +466,13 @@ Bun.serve<{ route: string }, {}>({
       const body = req.method === "POST" ? ((await req.json().catch(() => ({}))) as Record<string, unknown>) : {};
       const r = s.recipe;
       switch (action) {
+        case "duplicate": {
+          // A new session next to this one on the same attached folder: same recipe minus automations, new conversation, own mission.
+          if (!String(body.purpose ?? "").trim()) return bad("purpose required");
+          if (!r || !s.linked) return bad("only a session attached to a folder can be duplicated");
+          const copy = Object.fromEntries(DUPLICATE_KEYS.filter(k => r[k] !== undefined).map(k => [k, structuredClone(r[k])])) as Partial<Recipe>;
+          return createSession({ ...copy, parent: s.parent, name: String(body.name ?? ""), purpose: String(body.purpose), folder: s.folder, start: body.start === true, createdBy: "duplicate" });
+        }
         case "restart":
           if (r) {
             const extrasError = checkRecipeExtras(body);
@@ -509,8 +517,8 @@ Bun.serve<{ route: string }, {}>({
           const next = body.state as State;
           if (next === "working" && s.state !== "working") {
             s.workingSince = Date.now();
-            if (s.linked) {
-              const others = [...ctx.sessions.values()].filter(x => x !== s && x.linked && x.proc && x.state === "working" && samePath(x.folder, s.folder)).map(x => x.route);
+            if (s.linked && s.kind === "child") {
+              const others = [...ctx.sessions.values()].filter(x => x !== s && x.kind === "child" && x.linked && x.proc && x.state === "working" && samePath(x.folder, s.folder)).map(x => x.route);
               if (others.length) {
                 const routes = others.join(", ");
                 setIssue(s, "shared-folder-busy", "info", `working at the same time as ${routes} in ${s.folder}`, ["dismiss"]);

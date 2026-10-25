@@ -371,5 +371,11 @@
   "settings.save": "Salva",
   "empty.title": "Crea la tua prima sessione root",
   "empty.body": "Una sessione root è il tuo agente principale: riceve una missione, crea sessioni figlie e ti riporta i risultati.",
-  "empty.cta": "Nuova sessione root"
+  "empty.cta": "Nuova sessione root",
+  "roots.groupTitle": "{n} root su {folder}",
+  "tools.duplicate": "Duplica: una nuova root sulla stessa cartella",
+  "tools.duplicateNeedsFolder": "Si può duplicare solo una root collegata a una cartella (Modifica → Cartella)",
+  "dup.title": "Duplica {route}",
+  "dup.hint": "Una nuova root su {folder} con gli stessi modello, server MCP, skill, strumenti, approvazioni e ambiente. Parte con una conversazione nuova, senza figlie, pianificazioni o trigger.",
+  "dup.create": "Crea e avvia"
 }

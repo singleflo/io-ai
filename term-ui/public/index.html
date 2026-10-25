@@ -96,6 +96,8 @@
   .root { all: unset; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; color: var(--fg-2); transition: background .15s, color .15s; }
   .root:hover { background: var(--s2); color: var(--fg); }
   .root.sel { background: var(--s3); color: var(--fg); }
+  .root.in-group { padding-left: 22px; }
+  .root-group { padding: 8px 10px 2px; font: 500 12px var(--sans); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .root:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .root .rn { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .root .count { font-size: 12px; color: var(--muted); min-width: 20px; text-align: center; padding: 1px 6px; border-radius: 999px; background: var(--s2); }
@@ -710,6 +712,26 @@
     <button class="btn" type="button" id="filesClose" data-i18n="dlg.close"></button>
   </footer>
 </dialog>
+<dialog id="dupDlg">
+  <h3 id="dupTitle"></h3>
+  <p class="wiz-hint" id="dupHint"></p>
+  <form id="dupForm" autocomplete="off" class="wiz-body wiz-grid">
+    <div class="wiz-field wiz-wide">
+      <label for="dupName" data-i18n="roots.namePh"></label>
+      <input id="dupName" required pattern="[a-z][a-z0-9\-]{1,31}" data-i18n-title="form.nameRule">
+    </div>
+    <div class="wiz-field wiz-wide">
+      <label for="dupPurpose" data-i18n="wiz.mission"></label>
+      <textarea id="dupPurpose" rows="3" data-i18n-ph="wiz.missionPh" required></textarea>
+    </div>
+  </form>
+  <footer class="wiz-foot">
+    <span class="formerr" id="dupErr" hidden></span>
+    <span class="spacer"></span>
+    <button class="btn ghost" type="button" id="dupCancel" data-i18n="edit.cancel"></button>
+    <button class="btn primary" type="button" id="dupCreate" data-i18n="dup.create"></button>
+  </footer>
+</dialog>
 <dialog id="secretsDlg">
   <h3 data-i18n="secrets.title"></h3>
   <p class="wiz-hint" data-i18n="secrets.hint"></p>
@@ -948,7 +970,11 @@ function attach(route, host) {
   const ws = new WebSocket(`${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/pty/${enc(route)}`);
   const resize = () => { try { fit.fit(); } catch {} ws.readyState === 1 && ws.send(JSON.stringify({ t: "resize", cols: term.cols, rows: term.rows })); };
   const live = { route, closed: false, term, fit, resize, dispose: () => { ro.disconnect(); ws.onclose = null; ws.close(); term.dispose(); host.querySelector(".xterm")?.remove(); } };
-  ws.onmessage = e => term.write(e.data);
+  ws.onmessage = e => {
+    term.write(e.data);
+    // The server sends RIS right before spawning a new process (restart): the new PTY starts at 120x32, so refit once it exists.
+    if (e.data === "\x1bc") { term.reset(); term.clearSelection(); for (const ms of [150, 700]) setTimeout(() => { resize(); term.refresh(0, term.rows - 1); }, ms); }
+  };
   // Soft reload on (re)attach: a clean buffer takes the replayed scrollback without leftover escapes.
   ws.onopen = () => { term.reset(); resize(); };
   ws.onclose = () => { live.closed = true; }; // server gone or restarted: render() re-attaches
@@ -1034,12 +1060,13 @@ function paintOverlay(host, s) {
   ov.querySelector("button").onclick = e => { e.stopPropagation(); api(`/api/sessions/${enc(s.route)}/${copy[5]}`, {}).then(refresh); };
 }
 
-const toolsHtml = () => `<div class="group"><select aria-label="${t("tools.modelAria")}"></select>
+const toolsHtml = ({ duplicate = false } = {}) => `<div class="group"><select aria-label="${t("tools.modelAria")}"></select>
   <button class="btn" data-a="restart" title="${t("tools.restartTitle")}">${ic("restart")}${t("tools.restart")}</button></div>
   <button class="btn" data-a="toggle"></button>
   <span class="sep" aria-hidden="true"></span>
   <div class="cl">
   <button class="btn icon ghost" data-a="new-child" title="${t("tools.newChild")}" aria-label="${t("tools.newChild")}">${ic("plus")}</button>
+  ${duplicate ? `<button class="btn icon ghost" data-a="duplicate" title="${t("tools.duplicate")}" aria-label="${t("tools.duplicate")}">${ic("copy")}</button>` : ""}
   <button class="btn icon ghost" data-a="edit" title="${t("tools.edit")}" aria-label="${t("tools.edit")}">${ic("edit")}</button>
   <button class="btn icon ghost" data-a="files" title="${t("tools.files")}" aria-label="${t("tools.files")}">${ic("folderOpen")}</button>
   <button class="btn icon ghost" data-a="repaint" title="${t("tools.repaint")}" aria-label="${t("tools.repaint")}">${ic("repaint")}</button></div>
@@ -1054,6 +1081,8 @@ function wireTools(el, route) {
   el.querySelector('[data-a="edit"]').onclick = e => { e.stopPropagation(); openEdit(route); };
   el.querySelector('[data-a="files"]').onclick = e => { e.stopPropagation(); void openFiles(route); };
   el.querySelector('[data-a="new-child"]').onclick = e => { e.stopPropagation(); void openWizard("child", route); };
+  const dup = el.querySelector('[data-a="duplicate"]');
+  if (dup) dup.onclick = e => { e.stopPropagation(); openDuplicate(route); };
   el.querySelector('[data-a="archive"]').onclick = e => { e.stopPropagation(); void archive(route); };
   el.querySelector('[data-a="repaint"]').onclick = e => { e.stopPropagation(); repaint(route); };
   el.querySelector('[data-a="stop-subtree"]').onclick = e => { e.stopPropagation(); void treeStop(route, "stop-subtree"); };
@@ -1613,7 +1642,7 @@ const paintToggle = (btn, s) => {
 
 // Column 2: root terminal.
 let rootLive;
-$("roottools").innerHTML = toolsHtml();
+$("roottools").innerHTML = toolsHtml({ duplicate: true });
 function showRoot() {
   if (rootLive?.route === selected && !rootLive.closed) return;
   rootLive?.dispose();
@@ -1795,18 +1824,45 @@ function render() {
   const rs = roots();
   if (!rs.find(r => r.route === selected)) selected = rs[0]?.route ?? null;
   $("roots").innerHTML = "";
+  // Roots attached to the same folder form a group; a root that shares with no other root stands alone.
+  const layout = [];
+  const placed = new Set();
   for (const r of rs) {
+    if (placed.has(r.route)) continue;
+    const group = [r, ...rs.filter(x => x !== r && (r.sharedWith ?? []).includes(x.route))];
+    for (const x of group) placed.add(x.route);
+    layout.push(group);
+  }
+  const folderName = folder => folder.split("/").filter(Boolean).pop() ?? folder;
+  const rootButton = (r, grouped) => {
     const b = document.createElement("button");
-    b.className = "root" + (r.route === selected ? " sel" : "");
+    b.className = "root" + (grouped ? " in-group" : "") + (r.route === selected ? " sel" : "");
     if (r.route === selected) b.setAttribute("aria-current", "true");
     b.innerHTML = `<span class="dot" data-h="${health(r)}"></span><span class="rn"></span><span class="count">${kids(r.route).length}</span>`;
     b.querySelector(".rn").textContent = r.name;
     b.title = `${r.route} · ${stateLabel(r)}`;
     b.onclick = () => { selected = r.route; save("termui:selected", selected); render(); };
-    $("roots").appendChild(b);
+    return b;
+  };
+  for (const group of layout) {
+    if (group.length > 1) {
+      const label = document.createElement("div");
+      label.className = "root-group";
+      label.textContent = folderName(group[0].folder);
+      label.title = t("roots.groupTitle", { n: group.length, folder: group[0].folder });
+      $("roots").appendChild(label);
+    }
+    for (const r of group) $("roots").appendChild(rootButton(r, group.length > 1));
   }
   const sel = $("rootSel");
-  sel.replaceChildren(...rs.map(r => new Option(`${r.name} (${kids(r.route).length})`, r.route)));
+  sel.replaceChildren(...layout.flatMap(group => {
+    const options = group.map(r => new Option(`${r.name} (${kids(r.route).length})`, r.route));
+    if (group.length < 2) return options;
+    const og = document.createElement("optgroup");
+    og.label = folderName(group[0].folder);
+    og.append(...options);
+    return [og];
+  }));
   sel.value = selected ?? "";
   sel.disabled = !rs.length;
   $("leadHead").hidden = !selected;
@@ -1827,6 +1883,11 @@ function render() {
   $("rootmodel").textContent = modelOf(root);
   paintShared($("rootshared"), root);
   syncModel($("roottools"), root);
+  const dup = $("roottools").querySelector('[data-a="duplicate"]');
+  const dupLabel = t(root.linked ? "tools.duplicate" : "tools.duplicateNeedsFolder");
+  dup.disabled = !root.linked;
+  dup.title = dupLabel;
+  dup.setAttribute("aria-label", dupLabel);
   paintToggle($("roottools").querySelector('[data-a="toggle"]'), root);
   paintOverlay($("rootterm"), root);
   paintIssues($("rootissues"), root.issues, root.route);
@@ -1937,6 +1998,35 @@ const wizLoc = () => document.querySelector('input[name="wizLoc"]:checked').valu
 const wizConv = () => document.querySelector('input[name="wizConv"]:checked')?.value ?? "";
 const defaultModel = () => wiz.defaults.model?.split(":")[0] ?? "";
 const wizError = text => { $("wizErr").textContent = text ?? ""; $("wizErr").hidden = !text; };
+
+// Duplicate a root: a new root on the same folder; the server copies the recipe (minus schedules and triggers) and starts a new conversation.
+let dupFrom = null;
+function openDuplicate(route) {
+  const s = byRoute(route);
+  if (!s?.linked) return;
+  dupFrom = route;
+  $("dupTitle").textContent = t("dup.title", { route });
+  $("dupHint").textContent = t("dup.hint", { folder: s.folder });
+  $("dupName").value = "";
+  $("dupPurpose").value = "";
+  $("dupErr").hidden = true;
+  $("dupDlg").showModal();
+}
+$("dupCancel").onclick = () => $("dupDlg").close();
+$("dupForm").onsubmit = e => { e.preventDefault(); $("dupCreate").click(); };
+$("dupCreate").onclick = async () => {
+  if (!$("dupName").reportValidity() || !$("dupPurpose").reportValidity()) return;
+  const name = $("dupName").value.trim();
+  $("dupCreate").disabled = true;
+  const r = await api(`/api/sessions/${enc(dupFrom)}/duplicate`, { name, purpose: $("dupPurpose").value.trim(), start: true }).finally(() => { $("dupCreate").disabled = false; });
+  if (!r.ok) { $("dupErr").textContent = await r.text(); $("dupErr").hidden = false; return; }
+  const created = await r.json();
+  $("dupDlg").close();
+  selected = created.route.split("/")[0];
+  save("termui:selected", selected);
+  await refresh();
+  await refreshAux();
+};
 
 async function openWizard(mode, parent = null) {
   const [defaults, presets] = await Promise.all([

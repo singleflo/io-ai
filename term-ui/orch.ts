@@ -16,6 +16,7 @@ const USAGE = `usage: orch <command>
   restart R [--model M --thinking L --task M --smol M --compact N --mcp a,b|all|manual --skills a,b|all]
   send R text...
   move R --to R2
+  duplicate R --name N --purpose T [--start]   # a new session next to R on the same attached folder: same recipe without schedules/triggers, new conversation, no children
   edit R [--name N --purpose T --model M --thinking L --task M --smol M --compact N --mcp a,b|all|manual --skills a,b|all] [--restart]
   archive R [--force]
   archive-list
@@ -202,6 +203,11 @@ async function main(): Promise<void> {
     case "move": {
       if (pos.length !== 1) throw new Error(USAGE);
       console.log(await call(sessionPath(pos[0], "move"), { to: required(flag("to")) }));
+      break;
+    }
+    case "duplicate": {
+      if (pos.length !== 1) throw new Error(USAGE);
+      console.log(await call(sessionPath(pos[0], "duplicate"), { name: required(flag("name")), purpose: required(flag("purpose")), start: flags.start === true }));
       break;
     }
     case "adopt": {

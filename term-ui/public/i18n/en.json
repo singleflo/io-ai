@@ -371,5 +371,11 @@
   "settings.save": "Save",
   "empty.title": "Create your first root session",
   "empty.body": "A root session is your lead agent: it takes a mission, creates child sessions and reports back to you.",
-  "empty.cta": "New root session"
+  "empty.cta": "New root session",
+  "roots.groupTitle": "{n} roots on {folder}",
+  "tools.duplicate": "Duplicate: a new root on the same folder",
+  "tools.duplicateNeedsFolder": "Only a root attached to a folder can be duplicated (Edit → Folder)",
+  "dup.title": "Duplicate {route}",
+  "dup.hint": "A new root on {folder} with the same model, MCP servers, skills, tools, approvals and environment. It starts a new conversation, with no children, schedules or triggers.",
+  "dup.create": "Create and start"
 }
