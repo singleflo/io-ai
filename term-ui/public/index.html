@@ -845,7 +845,7 @@
     <span class="spacer"></span>
     <button class="btn icon ghost" id="inboxClose" type="button" data-i18n-title="inbox.close" data-i18n-aria="inbox.close"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
   </header>
-  <div class="inb-sub"><button class="btn sm" id="inboxNotify" type="button" data-i18n="inbox.notify" hidden></button><span id="inboxNotifyNote" hidden></span></div>
+  <div class="inb-sub"><button class="btn sm" id="inboxNotify" type="button" data-i18n="inbox.notify" hidden></button><span id="inboxNotifyNote" hidden></span><label class="sw"><input type="checkbox" id="inboxSound"><span data-i18n="inbox.sound"></span></label></div>
   <div id="inboxList"></div>
 </section>
 
@@ -2676,13 +2676,18 @@ function openRoute(route) {
   setView("sessions");
   render();
 }
+// Open a session and put the keyboard in its terminal (the session may be a root or a child card).
+function openTerminal(route) {
+  openRoute(route);
+  (route === selected ? rootLive : cards.get(route)?.live)?.term.focus();
+}
 // A REQ names its child by route or by short name; fall back to the root.
 const reqRoute = r => [r.child, r.child && `${r.root}/${r.child}`, r.root].find(n => n && byRoute(n));
 
 // Inbox: the drawer keeps item DOM keyed by id, so a push never wipes a half-edited approval.
 const INBOX = { items: [], tab: ls("termui:inboxTab", "open") === "all" ? "all" : "open", seen: null };
 const inboxEls = new Map(); // id -> { el, sig }
-const KIND_H = { approval: "warn", question: "warn", blocked: "bad", done: "ok", issue: "warn", digest: "off", mcp: "bad" };
+const KIND_H = { approval: "warn", question: "warn", waiting: "warn", blocked: "bad", done: "ok", issue: "warn", digest: "off", mcp: "bad" };
 const STATUS_H = { approved: "ok", answered: "ok", rejected: "bad", dismissed: "off" };
 const inboxOpenNow = () => $("inboxPanel").classList.contains("open");
 
@@ -2814,7 +2819,16 @@ function inboxCard(item) {
       reject.append(reason, button("danger", t("inbox.reject"), send));
       ctl.append(area, actions, reject);
     }
-  } else if (item.kind === "question" && open) {
+  } else if (item.kind === "waiting") {
+    // The session asks in its own terminal: the item closes by itself once the agent gets the answer.
+    if (open) {
+      const row = mk("div", "inb-actions");
+      const go = button("primary", t("inbox.openTerminal"), () => openTerminal(item.route));
+      go.disabled = !canOpen;
+      row.append(go);
+      ctl.append(row);
+    }
+  } else if (item.kind === "question" && open && item.data?.child) {
     const options = item.data?.options ?? [];
     if (options.length) {
       const row = mk("div", "inb-actions opts");
@@ -2842,6 +2856,7 @@ function inboxCard(item) {
 
 function openInbox() {
   $("inboxPanel").classList.add("open");
+  $("inboxSound").checked = soundOn();
   paintNotify();
   paintTabs();
   void loadInbox();
@@ -2864,9 +2879,42 @@ function paintNotify() {
 $("bell").onclick = () => (inboxOpenNow() ? closeInbox() : openInbox());
 $("inboxClose").onclick = closeInbox;
 $("inboxNotify").onclick = async () => { await Notification.requestPermission(); paintNotify(); };
+$("inboxSound").onchange = e => save("termui:sound", e.target.checked);
 for (const b of document.querySelectorAll("#inboxTabs button"))
   b.onclick = () => { INBOX.tab = b.dataset.tab; save("termui:inboxTab", INBOX.tab); paintTabs(); void loadInbox(); };
 document.addEventListener("keydown", e => { if (e.key === "Escape" && inboxOpenNow() && !document.querySelector("dialog[open]")) closeInbox(); });
+
+// Sound alert for items that need the user: a two-tone chime from WebAudio (no files). Browsers only allow audio
+// after a user gesture, so the context is created on the first click/key; before that the chime is skipped.
+const SOUND_KINDS = new Set(["waiting", "approval", "blocked", "mcp"]);
+const soundOn = () => ls("termui:sound", true) !== false;
+let audio = null;
+function unlockAudio() {
+  if (audio) return;
+  const Ctx = window.AudioContext ?? window.webkitAudioContext;
+  if (!Ctx) return;
+  audio = new Ctx();
+  void audio.resume();
+}
+for (const ev of ["pointerdown", "keydown"]) document.addEventListener(ev, unlockAudio, { capture: true });
+function chime() {
+  if (!soundOn() || !audio || audio.state !== "running") return;
+  const tone = (freq, start, dur) => {
+    const osc = audio.createOscillator();
+    const gain = audio.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.08, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    osc.connect(gain).connect(audio.destination);
+    osc.start(start);
+    osc.stop(start + dur);
+  };
+  const now = audio.currentTime;
+  tone(784, now, 0.12);
+  tone(1175, now + 0.12, 0.13);
+}
 
 // SSE `inbox` event: counts for the bell, and a browser notification for a new item while the tab is hidden.
 function notify(item) {
@@ -2881,7 +2929,10 @@ function onInboxEvent(e) {
   if (INBOX.seen === null) INBOX.seen = latest?.id ?? 0; // first event after connect: history, not news
   else if (latest && latest.id > INBOX.seen) {
     INBOX.seen = latest.id;
-    if (latest.status === "open") notify(latest);
+    if (latest.status === "open") {
+      notify(latest);
+      if (SOUND_KINDS.has(latest.kind)) chime();
+    }
   }
   if (inboxOpenNow()) void loadInbox();
   void loadView();

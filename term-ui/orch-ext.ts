@@ -1,5 +1,5 @@
 // omp extension loaded into every term-ui session: reports id/state/heartbeat/usage/REQs/MCP health to the term-ui server,
-// gates tool calls the recipe lists in `approve` behind the user's decision (inbox), adds `orch_ask_user` to roots,
+// gates tool calls the recipe lists in `approve` behind the user's decision (inbox), signals `ask` calls that wait for the user in the terminal,
 // and in root sessions delivers child notices (exit, hang) into the conversation.
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 
@@ -47,15 +47,18 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
-  // Posts a request that needs the user (approval, question) and returns the inbox id; retries while the server is unreachable.
-  async function openItem(ctx: ExtensionContext, path: "approval" | "ask", body: unknown): Promise<number | undefined> {
+  // Posts an approval request and returns the inbox id; retries while the server is unreachable.
+  async function openApproval(ctx: ExtensionContext, body: unknown): Promise<number | undefined> {
     for (let attempt = 0; attempt < 5; attempt++) {
-      const r = await post(path, body);
+      const r = await post("approval", body);
       if (r?.ok) return ((await r.json().catch(() => ({}))) as { id?: number }).id;
       await sleep(ctx, DECISION_POLL_MS);
     }
     return undefined;
   }
+
+  // `ask` calls waiting for the user in the terminal: toolCallId → the pending `waiting` post.
+  const waiting = new Map<string, Promise<unknown>>();
 
   let lastPostedId: string | undefined;
   const hello = (sessionId: string, reason: "start" | "switch") => {
@@ -135,7 +138,10 @@ export default function (pi: ExtensionAPI) {
     }
     void post("state", { state: "working" });
   });
-  pi.on("agent_end", () => void post("state", { state: "idle" }));
+  pi.on("agent_end", () => {
+    void post("state", { state: "idle" });
+    for (const toolCallId of [...waiting.keys()]) waitingEnd(toolCallId); // an interrupted ask never reports a result
+  });
   pi.on("session_shutdown", () => void post("state", { state: "stopped" }));
 
   // ---------- usage ----------
@@ -148,10 +154,16 @@ export default function (pi: ExtensionAPI) {
   // ---------- tool gate: REQ reporting + approvals ----------
   pi.on("tool_call", async (event, ctx) => {
     const input = asRecord(event.input);
+    if (event.toolName === "ask" && ctx.hasUI) {
+      const listed = Array.isArray(input.questions) ? input.questions.map(q => asRecord(q).question) : [];
+      const questions = listed.filter((q): q is string => typeof q === "string" && q.trim() !== "");
+      if (!questions.length && typeof input.question === "string" && input.question.trim()) questions.push(input.question);
+      if (questions.length) waiting.set(event.toolCallId, post("waiting", { toolCallId: event.toolCallId, questions }));
+    }
     reportReq(event.toolName, input);
     if (!(await policyReady(ctx))) return { block: true, reason: "The approval policy could not be loaded from term-ui. Do not retry this call; report it." };
     if (!approve.some(re => re.test(event.toolName))) return;
-    const id = await openItem(ctx, "approval", { toolName: event.toolName, input });
+    const id = await openApproval(ctx, { toolName: event.toolName, input });
     if (id === undefined) return { block: true, reason: "The approval service is unreachable. Do not retry this call; report it." };
     const item = await awaitDecision(ctx, id);
     if (item?.status === "approved") {
@@ -175,31 +187,17 @@ export default function (pi: ExtensionAPI) {
   });
   // Expired credentials surface only when a tool is called: an auth-looking error from an MCP tool marks its server failed.
   pi.on("tool_result", event => {
+    if (event.toolName === "ask") waitingEnd(event.toolCallId);
     if (!event.toolName.startsWith("mcp__") || !event.isError) return;
     const text = event.content.map(c => (c.type === "text" ? c.text : "")).join(" ");
     if (MCP_AUTH_ERROR.test(text)) void post("report-mcp", { server: event.toolName.slice("mcp__".length), type: "failed", error: text.slice(0, 200) });
   });
 
-  // ---------- ask the user (roots only) ----------
-  if (kind === "root") {
-    const z = pi.zod;
-    const Ask = z.object({
-      question: z.string().describe("The question, in the user's language"),
-      options: z.array(z.string()).optional().describe("Answer choices shown as buttons; omit for a free-text answer"),
-    });
-    pi.registerTool({
-      name: "orch_ask_user",
-      label: "Ask the user",
-      description: "Ask the user a question and wait for the answer in the term-ui inbox. Use it for every question to the user; NEVER wait for an answer in prose.",
-      parameters: Ask,
-      approval: "read",
-      async execute(_toolCallId, raw, _signal, _onUpdate, ctx) {
-        const params = Ask.parse(raw);
-        const id = await openItem(ctx, "ask", { question: params.question, options: params.options ?? [] });
-        const item = id === undefined ? undefined : await awaitDecision(ctx, id);
-        const text = item?.status === "answered" && item.answer ? item.answer : "The user gave no answer.";
-        return { content: [{ type: "text", text }], details: {} };
-      },
-    });
+  // ---------- ask tool: tell the inbox this session waits for the user in its terminal ----------
+  function waitingEnd(toolCallId: string) {
+    const posted = waiting.get(toolCallId);
+    if (!posted) return;
+    waiting.delete(toolCallId);
+    void posted.then(() => post("waiting-done", { toolCallId }));
   }
 }

@@ -5,7 +5,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { orchDir, workspaceRoot } from "./workspace";
 
-export type InboxKind = "question" | "approval" | "blocked" | "done" | "issue" | "digest" | "mcp";
+export type InboxKind = "question" | "approval" | "waiting" | "blocked" | "done" | "issue" | "digest" | "mcp";
 export type InboxStatus = "open" | "answered" | "approved" | "rejected" | "dismissed";
 export type InboxItem = {
   id: number;
@@ -158,9 +158,9 @@ export function inboxCounts(): { open: number; approvals: number } {
   return { open: r.open, approvals: r.approvals };
 }
 
-// Routes with an open approval or an open `orch_ask_user` question (REQ questions carry `data.child` and do not block the asking agent).
+// Routes with an open approval or a `waiting` item (an `ask` waiting in the terminal). REQ questions carry `data.child` and do not block the asking agent.
 export function awaitingRoutes(): Set<string> {
-  const rows = db().query("SELECT DISTINCT route FROM inbox WHERE status = 'open' AND (kind = 'approval' OR (kind = 'question' AND json_extract(data, '$.child') IS NULL))").all() as { route: string }[];
+  const rows = db().query("SELECT DISTINCT route FROM inbox WHERE status = 'open' AND kind IN ('approval', 'waiting')").all() as { route: string }[];
   return new Set(rows.map(r => r.route));
 }
 

@@ -96,7 +96,7 @@ export function clearIssue(s: Session, ...codes: string[]) {
   }
 }
 
-// Routes with an open approval or `orch_ask_user` question; refreshed whenever the inbox changes.
+// Routes with an open approval or `waiting` item; refreshed whenever the inbox changes.
 let awaiting = awaitingRoutes();
 onInboxChange(() => void (awaiting = awaitingRoutes()));
 export const isAwaiting = (route: string) => awaiting.has(route);
@@ -476,7 +476,7 @@ export async function startSession(s: Session): Promise<boolean> {
       s.obs = undefined;
       s.exit = signal ?? `exit ${code}`;
       logEvent(s.route, "exit", { exit: s.exit });
-      for (const kind of ["approval", "question"] as const) for (const item of inboxOpenFor(s.route, kind)) if (!item.data.child) inboxDecide(item.id, "dismissed"); // the waiting tool died with the process
+      for (const kind of ["approval", "question", "waiting"] as const) for (const item of inboxOpenFor(s.route, kind)) if (!item.data.child) inboxDecide(item.id, "dismissed"); // the waiting tool died with the process
       flushScrollback(s);
       if (s.restarting) {
         s.restarting = false;

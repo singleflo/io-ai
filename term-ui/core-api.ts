@@ -23,7 +23,7 @@ const limitOf = (url: URL, def: number, max: number) => Math.min(max, Math.max(1
 
 // ---------- audit ----------
 // Endpoints the extension and the page call all the time: not audited.
-const QUIET_ACTIONS = new Set(["hello", "beat", "state", "notices", "policy", "approval", "ask", "report-usage", "report-req", "report-reply", "report-mcp"]);
+const QUIET_ACTIONS = new Set(["hello", "beat", "state", "notices", "policy", "approval", "waiting", "waiting-done", "report-usage", "report-req", "report-reply", "report-mcp"]);
 const REDACTED = new Set(["text", "value", "answer"]); // free text and secrets: only the length is logged
 
 // Logs every non-GET `/api/*` call. `req` must be a clone: the handler still reads the original body.
@@ -56,16 +56,15 @@ async function inboxAction(req: Request, id: number, action: string): Promise<Re
     case "answer": {
       if (item.kind !== "question") return bad("not a question");
       if (!answer) return bad("answer required");
+      // Only REQ questions are answered here (questions of the agent itself are answered in its terminal); the answer goes to the root that sent the REQ.
       const child = str(item.data.child);
-      if (child) {
-        // A REQ question: the answer goes to the root that sent the REQ.
-        const root = ctx.sessions.get(str(item.data.root));
-        if (!root?.proc) return bad("root not running", 409);
-        try {
-          sendTask(root, `[orch] user answer for ${child} ${str(item.data.num)}: ${answer}`);
-        } catch (e) {
-          return bad((e as Error).message, 409);
-        }
+      if (!child) return bad("answer this question in the session's terminal");
+      const root = ctx.sessions.get(str(item.data.root));
+      if (!root?.proc) return bad("root not running", 409);
+      try {
+        sendTask(root, `[orch] user answer for ${child} ${str(item.data.num)}: ${answer}`);
+      } catch (e) {
+        return bad((e as Error).message, 409);
       }
       return decide(inboxDecide(id, "answered", answer), "answered", answer);
     }
@@ -263,13 +262,21 @@ async function sessionAction(req: Request, s: Session, action: string): Promise<
       const item = inboxAdd(s.route, "approval", toolName, JSON.stringify(input).slice(0, 400), { toolName, input });
       return json({ id: item.id });
     }
-    case "ask": {
+    case "waiting": {
       const body = await readBody(req);
-      const question = str(body.question).trim();
-      if (!question) return bad("question required");
-      const options = Array.isArray(body.options) ? body.options.filter(o => typeof o === "string") : [];
-      const item = inboxAdd(s.route, "question", question.slice(0, 120), question, options.length ? { options } : {});
+      const toolCallId = str(body.toolCallId);
+      const questions = Array.isArray(body.questions) ? body.questions.filter((q): q is string => typeof q === "string" && q.trim() !== "") : [];
+      if (!toolCallId) return bad("toolCallId required");
+      if (!questions.length) return bad("questions required");
+      for (const old of inboxOpenFor(s.route, "waiting")) inboxDecide(old.id, "answered");
+      const item = inboxAdd(s.route, "waiting", questions[0].trim().slice(0, 120), questions.join("\n"), { toolCallId, questions });
       return json({ id: item.id });
+    }
+    case "waiting-done": {
+      const toolCallId = str((await readBody(req)).toolCallId);
+      if (!toolCallId) return bad("toolCallId required");
+      for (const item of inboxOpenFor(s.route, "waiting")) if (item.data.toolCallId === toolCallId) inboxDecide(item.id, "answered");
+      return json({ ok: true });
     }
     case "report-usage": {
       if (req.method !== "POST") return undefined;

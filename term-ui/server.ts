@@ -30,8 +30,8 @@ try {
   ctx.sdkVersion = (JSON.parse(readFileSync(join(import.meta.dir, "node_modules", "@oh-my-pi", "pi-coding-agent", "package.json"), "utf8")) as { version: string }).version;
 } catch {}
 openStore();
-// The agent waiting for an open approval or `orch_ask_user` question died with the previous server run.
-for (const item of inboxList("open", 10_000)) if (item.kind === "approval" || (item.kind === "question" && !item.data.child)) inboxDecide(item.id, "dismissed");
+// The agent waiting for an open approval or `ask` died with the previous server run.
+for (const item of inboxList("open", 10_000)) if (item.kind === "approval" || item.kind === "waiting" || (item.kind === "question" && !item.data.child)) inboxDecide(item.id, "dismissed");
 const TOKEN = ensureToken(ctx.ws);
 
 const RECIPE_KEYS = ["model", "thinking", "roles", "compactPercent", "mcp", "skills", "tools", "approve", "schedules", "triggers", "env"] as const;
